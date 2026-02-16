@@ -54,7 +54,7 @@ function FOVInfoProvider.sectionsForBottomOfDialog(f, _)
 
       f:row {
         f:static_text {
-          title = "FOV Overlay Plugin v1.0.1",
+          title = "FOV Overlay Plugin v1.0.2",
         },
       },
 

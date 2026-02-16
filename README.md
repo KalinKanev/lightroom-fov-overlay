@@ -6,7 +6,7 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 ## Download
 
-**[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)**
+**[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** and see detailed **[installation instructions](#installation)**.
 
 ## Features
 
@@ -19,25 +19,27 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 ## Installation
 
-1. Download the [latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest) zip file.
+1. **[Download the plugin package](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)**. A zip file will be downloaded to your computer.
 
-2. Unzip and locate the `fovoverlay.lrplugin` folder inside.
+2. Unzip the downloaded file. Inside the extracted content, locate the `fovoverlay.lrplugin` folder.
 
 3. Find the folder where you keep your Lightroom plugins. If you don't know where this is, open Lightroom, go to `File > Plug-in Manager` and click `Add`. This will open a dialog in Lightroom's default plugin folder.
 
 4. **macOS only** — Remove the quarantine flag that macOS adds to downloaded files. Open Terminal and run:
    ```
-   xattr -cr ~/Downloads/fovoverlay-v1.0.0/fovoverlay.lrplugin
+   xattr -cr /path/to/fovoverlay.lrplugin
    ```
-   Adjust the path if you extracted the zip elsewhere. Without this step, Lightroom may not be able to load the overlay images.
+   Replace `/path/to/` with the actual path to the extracted folder. Without this step, Lightroom may not be able to load the overlay images.
 
    **Windows only** — Before extracting, right-click the downloaded zip file, select Properties, and check **Unblock** if present, then click OK. Then extract.
 
-5. Copy the `fovoverlay.lrplugin` folder to your Lightroom plugins folder. Typical locations:
+5. To **update an existing installation**, first remove the old `fovoverlay.lrplugin` folder from your plugins directory before copying the new one. Copying over an existing folder is not recommended.
+
+6. Copy the `fovoverlay.lrplugin` folder to your Lightroom plugins folder. Typical locations:
    - **macOS**: `~/Library/Application Support/Adobe/Lightroom/Modules/`
    - **Windows**: `C:\Users\<username>\AppData\Roaming\Adobe\Lightroom\Modules\`
 
-6. Open Lightroom and go to `File > Plug-in Manager`.
+7. Open Lightroom and go to `File > Plug-in Manager`.
    - **New installation**: Click `Add` and select the `fovoverlay.lrplugin` folder.
    - **Update**: Select the plugin and click `Reload Plug-in`.
 
