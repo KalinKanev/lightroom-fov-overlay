@@ -170,10 +170,18 @@ LrTasks.startAsyncTask(function()
       end
     end
 
-    -- Build image view with all overlays (visibility bound to checkbox props)
-    local imageView = FOVRenderer.createImageWithBindableOverlays(
-      photo, allCropRects, props, displayWidth, displayHeight, workingWidth, workingHeight
-    )
+    -- Build image view: macOS uses overlapping PNG views, Windows uses PowerShell rendering
+    local imageView
+    if WIN_ENV then
+      imageView = FOVRenderer.createWindowsImageView(
+        photo, allCropRects, props, displayWidth, displayHeight,
+        workingWidth, workingHeight, standardFocalLengths
+      )
+    else
+      imageView = FOVRenderer.createImageWithBindableOverlays(
+        photo, allCropRects, props, displayWidth, displayHeight, workingWidth, workingHeight
+      )
+    end
 
     local contents = f:column {
       bind_to_object = props,
