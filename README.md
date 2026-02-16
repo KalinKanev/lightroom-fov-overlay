@@ -25,11 +25,19 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 3. Find the folder where you keep your Lightroom plugins. If you don't know where this is, open Lightroom, go to `File > Plug-in Manager` and click `Add`. This will open a dialog in Lightroom's default plugin folder.
 
-4. Copy the `fovoverlay.lrplugin` folder to your Lightroom plugins folder. Typical locations:
+4. **macOS only** — Remove the quarantine flag that macOS adds to downloaded files. Open Terminal and run:
+   ```
+   xattr -cr ~/Downloads/fovoverlay-v1.0.0/fovoverlay.lrplugin
+   ```
+   Adjust the path if you extracted the zip elsewhere. Without this step, Lightroom may not be able to load the overlay images.
+
+   **Windows only** — Before extracting, right-click the downloaded zip file, select Properties, and check **Unblock** if present, then click OK. Then extract.
+
+5. Copy the `fovoverlay.lrplugin` folder to your Lightroom plugins folder. Typical locations:
    - **macOS**: `~/Library/Application Support/Adobe/Lightroom/Modules/`
    - **Windows**: `C:\Users\<username>\AppData\Roaming\Adobe\Lightroom\Modules\`
 
-5. Open Lightroom and go to `File > Plug-in Manager`.
+6. Open Lightroom and go to `File > Plug-in Manager`.
    - **New installation**: Click `Add` and select the `fovoverlay.lrplugin` folder.
    - **Update**: Select the plugin and click `Reload Plug-in`.
 
@@ -53,14 +61,7 @@ If the selected photo has a Lightroom crop applied, the plugin automatically:
 
 Each overlay rectangle shows how much of the current image you would need to crop to match the field of view of a longer focal length. The megapixel count next to each checkbox tells you how much resolution remains after that crop.
 
-| Color  | Meaning            |
-|--------|--------------------|
-| Green  | 1st selected FL    |
-| Yellow | 2nd selected FL    |
-| Orange | 3rd selected FL    |
-| Red    | 4th selected FL    |
-
-Colors cycle if more than 4 focal lengths are selected.
+Each selected focal length gets a unique color from the palette: green, yellow, orange, red, cyan, magenta, blue, lime, pink, white.
 
 ## Requirements
 
@@ -78,6 +79,20 @@ Crop Height = Image Height / Crop Ratio
 ```
 
 The resulting rectangle is centered on the image and drawn as colored corner markers.
+
+## Troubleshooting
+
+### Overlay markers not showing
+
+This is usually caused by macOS quarantine blocking the PNG assets after download.
+
+1. Open Terminal
+2. Run: `xattr -cr /path/to/fovoverlay.lrplugin`
+3. In Lightroom, go to `File > Plug-in Manager`, select the plugin, and click `Reload Plug-in`
+
+### Dialog too large or Close button not visible
+
+Make sure you're running the latest version. The plugin scales the dialog to fit your Lightroom window automatically.
 
 ## License
 
