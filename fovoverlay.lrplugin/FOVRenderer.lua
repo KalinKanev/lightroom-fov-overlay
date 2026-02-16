@@ -308,15 +308,18 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
     LrFileUtils.delete(outputPath)
   end
 
-  local scaleX = displayWidth / workingWidth
-  local scaleY = displayHeight / workingHeight
-  local cornerLen = FOVRenderer.cornerSize
-  local penWidth = 4
-
   local lines = {}
   table.insert(lines, 'Add-Type -AssemblyName System.Drawing')
   table.insert(lines, '$img = [System.Drawing.Image]::FromFile("' .. baseImagePath .. '")')
   table.insert(lines, '$g = [System.Drawing.Graphics]::FromImage($img)')
+
+  -- Compute scale from actual JPEG dimensions to working (sensor) dimensions.
+  -- This handles Windows display scaling (125%, 150%, etc.) where the JPEG
+  -- returned by requestJpegThumbnail may differ from the requested size.
+  table.insert(lines, '$scaleX = $img.Width / ' .. workingWidth)
+  table.insert(lines, '$scaleY = $img.Height / ' .. workingHeight)
+  table.insert(lines, string.format('$cl = [math]::Max(15, [math]::Floor(40 * $img.Width / %d))', displayWidth))
+  table.insert(lines, string.format('$pw = [math]::Max(2, [math]::Floor(4 * $img.Width / %d))', displayWidth))
 
   for i, rect in ipairs(allCropRects) do
     -- Check if this focal length is in the enabled list
@@ -333,27 +336,28 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
       local colorName = FOVRenderer.colorNames[colorIndex]
       local rgb = FOVRenderer.colorRGB[colorName]
 
-      local left = math.floor(rect.left * scaleX)
-      local top = math.floor(rect.top * scaleY)
-      local right = math.floor((rect.left + rect.width) * scaleX)
-      local bottom = math.floor((rect.top + rect.height) * scaleY)
-
       table.insert(lines, string.format(
-        '$p = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, %d, %d, %d), %d)',
-        rgb[1], rgb[2], rgb[3], penWidth))
+        '$p = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, %d, %d, %d), $pw)',
+        rgb[1], rgb[2], rgb[3]))
+
+      -- Pass raw rect coordinates; PowerShell scales using actual image dimensions
+      table.insert(lines, string.format('$left = [math]::Floor(%d * $scaleX)', rect.left))
+      table.insert(lines, string.format('$top = [math]::Floor(%d * $scaleY)', rect.top))
+      table.insert(lines, string.format('$right = [math]::Floor(%d * $scaleX)', rect.left + rect.width))
+      table.insert(lines, string.format('$bottom = [math]::Floor(%d * $scaleY)', rect.top + rect.height))
 
       -- Top-left corner
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', left, top, left + cornerLen, top))
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', left, top, left, top + cornerLen))
+      table.insert(lines, '$g.DrawLine($p, $left, $top, ($left + $cl), $top)')
+      table.insert(lines, '$g.DrawLine($p, $left, $top, $left, ($top + $cl))')
       -- Top-right corner
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', right - cornerLen, top, right, top))
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', right, top, right, top + cornerLen))
+      table.insert(lines, '$g.DrawLine($p, ($right - $cl), $top, $right, $top)')
+      table.insert(lines, '$g.DrawLine($p, $right, $top, $right, ($top + $cl))')
       -- Bottom-left corner
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', left, bottom, left + cornerLen, bottom))
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', left, bottom - cornerLen, left, bottom))
+      table.insert(lines, '$g.DrawLine($p, $left, $bottom, ($left + $cl), $bottom)')
+      table.insert(lines, '$g.DrawLine($p, $left, ($bottom - $cl), $left, $bottom)')
       -- Bottom-right corner
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', right - cornerLen, bottom, right, bottom))
-      table.insert(lines, string.format('$g.DrawLine($p, %d, %d, %d, %d)', right, bottom - cornerLen, right, bottom))
+      table.insert(lines, '$g.DrawLine($p, ($right - $cl), $bottom, $right, $bottom)')
+      table.insert(lines, '$g.DrawLine($p, $right, ($bottom - $cl), $right, $bottom)')
 
       table.insert(lines, '$p.Dispose()')
     end
