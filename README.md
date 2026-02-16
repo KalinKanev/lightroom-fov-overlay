@@ -19,29 +19,56 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 ## Installation
 
-1. **[Download the plugin package](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)**. A zip file will be downloaded to your computer.
+### macOS
 
-2. Unzip the downloaded file. Inside the extracted content, locate the `fovoverlay.lrplugin` folder.
+Open Terminal and run:
 
-3. Find the folder where you keep your Lightroom plugins. If you don't know where this is, open Lightroom, go to `File > Plug-in Manager` and click `Add`. This will open a dialog in Lightroom's default plugin folder.
+```bash
+# Download and unzip
+cd ~/Downloads
+curl -L https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest/download/source.zip -o fov-overlay.zip \
+  || curl -L $(curl -s https://api.github.com/repos/KalinKanev/lightroom-fov-overlay/releases/latest | grep zipball_url | cut -d '"' -f 4) -o fov-overlay.zip
+unzip fov-overlay.zip
 
-4. **macOS only** — Remove the quarantine flag that macOS adds to downloaded files. Open Terminal and run:
-   ```
-   xattr -cr /path/to/fovoverlay.lrplugin
-   ```
-   Replace `/path/to/` with the actual path to the extracted folder. Without this step, Lightroom may not be able to load the overlay images.
+# Remove old version (if updating)
+rm -rf "$HOME/Library/Application Support/Adobe/Lightroom/Modules/fovoverlay.lrplugin"
 
-   **Windows only** — Before extracting, right-click the downloaded zip file, select Properties, and check **Unblock** if present, then click OK. Then extract.
+# Install — adjust the folder name to match the extracted zip
+cp -R KalinKanev-lightroom-fov-overlay-*/fovoverlay.lrplugin "$HOME/Library/Application Support/Adobe/Lightroom/Modules/"
+```
 
-5. To **update an existing installation**, first remove the old `fovoverlay.lrplugin` folder from your plugins directory before copying the new one. Copying over an existing folder is not recommended.
+Then in Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
 
-6. Copy the `fovoverlay.lrplugin` folder to your Lightroom plugins folder. Typical locations:
+### Windows
+
+Open PowerShell and run:
+
+```powershell
+# Download and unzip
+cd $env:USERPROFILE\Downloads
+Invoke-WebRequest -Uri "https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest" -OutFile fov-overlay.zip -MaximumRedirection 5
+Expand-Archive -Path fov-overlay.zip -DestinationPath fov-overlay -Force
+
+# Remove old version (if updating)
+Remove-Item -Recurse -Force "$env:APPDATA\Adobe\Lightroom\Modules\fovoverlay.lrplugin" -ErrorAction SilentlyContinue
+
+# Install
+Copy-Item -Recurse (Get-ChildItem fov-overlay\*\fovoverlay.lrplugin).FullName "$env:APPDATA\Adobe\Lightroom\Modules\"
+```
+
+Then in Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
+
+### Manual installation
+
+If you prefer not to use the command line:
+
+1. **[Download the plugin package](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** — click "Source code (zip)".
+2. Unzip and locate the `fovoverlay.lrplugin` folder inside.
+3. If updating, remove the old `fovoverlay.lrplugin` from your plugins folder first.
+4. Copy `fovoverlay.lrplugin` to your Lightroom plugins folder:
    - **macOS**: `~/Library/Application Support/Adobe/Lightroom/Modules/`
-   - **Windows**: `C:\Users\<username>\AppData\Roaming\Adobe\Lightroom\Modules\`
-
-7. Open Lightroom and go to `File > Plug-in Manager`.
-   - **New installation**: Click `Add` and select the `fovoverlay.lrplugin` folder.
-   - **Update**: Select the plugin and click `Reload Plug-in`.
+   - **Windows**: `%APPDATA%\Adobe\Lightroom\Modules\`
+5. In Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
 
 ## Usage
 
@@ -86,11 +113,11 @@ The resulting rectangle is centered on the image and drawn as colored corner mar
 
 ### Overlay markers not showing
 
-This is usually caused by macOS quarantine blocking the PNG assets after download.
+If the colored corner markers don't appear on the image:
 
-1. Open Terminal
-2. Run: `xattr -cr /path/to/fovoverlay.lrplugin`
-3. In Lightroom, go to `File > Plug-in Manager`, select the plugin, and click `Reload Plug-in`
+1. Make sure the `assets` folder with all PNG files is present inside `fovoverlay.lrplugin`
+2. Try removing and reinstalling the plugin using the commands above
+3. In Lightroom: `File > Plug-in Manager`, select the plugin, click `Reload Plug-in`
 
 ### Dialog too large or Close button not visible
 
