@@ -4,6 +4,10 @@ A plugin for Lightroom Classic (macOS and Windows) that shows graphical overlays
 
 Select a photo shot at a given focal length and instantly see crop rectangles for longer focal lengths — helping you decide how much to crop and what resolution you'll retain.
 
+## Download
+
+**[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)**
+
 ## Features
 
 - Visualize crop areas for standard focal lengths (24mm–1200mm)
@@ -11,13 +15,13 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 - See remaining megapixels for each crop level
 - Crop-aware: detects Lightroom crop and calculates the equivalent focal length
 - Screen-aware dialog sizing — fits any display
-- Color-coded corner overlays (green, yellow, orange, red)
+- 10 distinct color-coded corner overlays
 
 ## Installation
 
-1. Download or clone this repository to your computer.
+1. Download the [latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest) zip file.
 
-2. Locate the `fovoverlay.lrplugin` folder inside the downloaded content.
+2. Unzip and locate the `fovoverlay.lrplugin` folder inside.
 
 3. Find the folder where you keep your Lightroom plugins. If you don't know where this is, open Lightroom, go to `File > Plug-in Manager` and click `Add`. This will open a dialog in Lightroom's default plugin folder.
 
