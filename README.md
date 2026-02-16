@@ -4,6 +4,8 @@ A plugin for Lightroom Classic (macOS and Windows) that shows graphical overlays
 
 Select a photo shot at a given focal length and instantly see crop rectangles for longer focal lengths — helping you decide how much to crop and what resolution you'll retain.
 
+<img src="screenshot.png" alt="FOV Overlay Dialog" width="700"/>
+
 ## Download
 
 **[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** and see detailed **[installation instructions](#installation)**.
