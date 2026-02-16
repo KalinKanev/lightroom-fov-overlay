@@ -254,31 +254,32 @@ FOVRenderer.colorRGB = {
 --[[
   Export the photo as a JPEG thumbnail to a temp file.
   Uses requestJpegThumbnail which returns the photo as displayed (with crop).
+  Pattern follows Focus Points MogrifyUtils.exportToDisk.
 ]]
 function FOVRenderer.exportBaseImage(photo, displayWidth, displayHeight)
-  local tmpDir = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "fov_overlay")
-  LrFileUtils.createAllDirectories(tmpDir)
+  local tempPath = LrPathUtils.getStandardFilePath("temp")
+  local basePath = LrPathUtils.child(tempPath, "fov_base.jpg")
 
-  local basePath = LrPathUtils.child(tmpDir, "fov_base.jpg")
   if LrFileUtils.exists(basePath) then
     LrFileUtils.delete(basePath)
   end
 
-  local thumbnailSize = math.max(displayWidth, displayHeight)
-  photo:requestJpegThumbnail(thumbnailSize, function(data, errorMsg)
+  local done = false
+  photo:requestJpegThumbnail(displayWidth, displayHeight, function(data, errorMsg)
     if data then
-      local file = io.open(basePath, "wb")
-      file:write(data)
-      file:close()
+      local success, _ = pcall(function()
+        local localFile = io.open(basePath, "w+b")
+        if localFile then
+          localFile:write(data)
+          localFile:close()
+        end
+      end)
     end
+    done = true
   end)
 
-  -- Wait for file to appear (up to 10 seconds)
-  local waited = 0
-  while not LrFileUtils.exists(basePath) and waited < 100 do
-    LrTasks.sleep(0.1)
-    waited = waited + 1
-  end
+  -- Busy wait for async callback (same pattern as Focus Points)
+  while not done do LrTasks.sleep(0.2) end
 
   return basePath
 end
@@ -298,9 +299,14 @@ end
   Returns: Path to the rendered JPEG
 ]]
 function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFLs, displayWidth, displayHeight, workingWidth, workingHeight, renderCount)
-  local tmpDir = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "fov_overlay")
-  local outputPath = LrPathUtils.child(tmpDir, "fov_render_" .. renderCount .. ".jpg")
-  local scriptPath = LrPathUtils.child(tmpDir, "fov_draw.ps1")
+  local tempPath = LrPathUtils.getStandardFilePath("temp")
+  local outputPath = LrPathUtils.child(tempPath, "fov_render_" .. renderCount .. ".jpg")
+  local scriptPath = LrPathUtils.child(tempPath, "fov_draw.ps1")
+
+  -- Delete previous render if exists
+  if LrFileUtils.exists(outputPath) then
+    LrFileUtils.delete(outputPath)
+  end
 
   local scaleX = displayWidth / workingWidth
   local scaleY = displayHeight / workingHeight
@@ -357,11 +363,17 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
   table.insert(lines, '$img.Save("' .. outputPath .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)')
   table.insert(lines, '$img.Dispose()')
 
-  local file = io.open(scriptPath, "w")
-  file:write(table.concat(lines, "\r\n"))
-  file:close()
+  local scriptFile = io.open(scriptPath, "w+b")
+  scriptFile:write(table.concat(lines, "\r\n"))
+  scriptFile:close()
 
-  LrTasks.execute('powershell -ExecutionPolicy Bypass -File "' .. scriptPath .. '"')
+  -- Double-quote wrapping matches Focus Points LrTasks.execute pattern
+  local cmdline = 'powershell -ExecutionPolicy Bypass -File "' .. scriptPath .. '"'
+  LrTasks.execute('"' .. cmdline .. '"')
+
+  -- Yield to avoid Windows process queue saturation (Focus Points pattern)
+  LrTasks.sleep(0.02)
+  LrTasks.yield()
 
   return outputPath
 end
