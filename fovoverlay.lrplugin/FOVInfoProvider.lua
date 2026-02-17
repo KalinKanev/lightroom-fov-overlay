@@ -14,7 +14,7 @@ local LrTasks     = import 'LrTasks'
 
 local FOVInfoProvider = {}
 
-local PLUGIN_VERSION = { major = 1, minor = 1, revision = 3 }
+local PLUGIN_VERSION = { major = 1, minor = 1, revision = 4 }
 
 local GITHUB_API_URL     = "https://api.github.com/repos/KalinKanev/lightroom-fov-overlay/releases/latest"
 local GITHUB_RELEASES_URL = "https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest"
