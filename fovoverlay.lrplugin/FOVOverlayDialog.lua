@@ -61,25 +61,70 @@ LrTasks.startAsyncTask(function()
 
     local isCropped = (cropLeft > 0.001 or cropTop > 0.001 or cropRight < 0.999 or cropBottom < 0.999)
 
-    -- Working dimensions and effective FL account for any crop
-    local workingWidth, workingHeight, effectiveFL
+    -- Crop rect for the renderer, nil if not cropped
+    -- When CropAngle != 0, compute the 4 rotated corner points in normalized coords
+    local cropAngle = devSettings.CropAngle or 0
+    local cropRect = nil
     if isCropped then
-      workingWidth = math.floor(imageWidth * (cropRight - cropLeft))
-      workingHeight = math.floor(imageHeight * (cropBottom - cropTop))
+      local rad = math.rad(-cropAngle)
+      local cosA = math.cos(rad)
+      local sinA = math.sin(rad)
+      local cx, cy = 0.5, 0.5
+
+      -- Crop rectangle corners in LR's rotated coordinate space
+      local rawCorners = {
+        { cropLeft, cropTop },
+        { cropRight, cropTop },
+        { cropRight, cropBottom },
+        { cropLeft, cropBottom },
+      }
+
+      -- Rotate each corner back to the original image space
+      local corners = {}
+      for _, c in ipairs(rawCorners) do
+        local x = cosA * (c[1] - cx) - sinA * (c[2] - cy) + cx
+        local y = sinA * (c[1] - cx) + cosA * (c[2] - cy) + cy
+        table.insert(corners, { x, y })
+      end
+
+      cropRect = {
+        corners = corners,  -- 4 points in normalized 0-1 coords, rotated to original image space
+      }
+    end
+
+    -- Compute cropped dimensions and effective FL for cropped view mode
+    local croppedWidth, croppedHeight, effectiveFL
+    if isCropped then
+      croppedWidth = math.floor(imageWidth * (cropRight - cropLeft))
+      croppedHeight = math.floor(imageHeight * (cropBottom - cropTop))
       effectiveFL = math.floor(originalFL / (cropRight - cropLeft) + 0.5)
     else
-      workingWidth = imageWidth
-      workingHeight = imageHeight
+      croppedWidth = imageWidth
+      croppedHeight = imageHeight
       effectiveFL = originalFL
     end
 
     -- Create observable properties
     local props = LrBinding.makePropertyTable(context)
 
-    -- Initialize checkbox states: enabled for the first 4 available FLs, disabled for those <= effectiveFL
+    -- View mode: "full" (uncropped) or "cropped"
+    props.viewMode = "full"
+    props.viewModeItems = isCropped
+      and { { title = "Full Frame", value = "full" }, { title = "Cropped", value = "cropped" } }
+      or  { { title = "Full Frame", value = "full" } }
+
+    -- Header text (reactive to viewMode)
+    props.headerText = isCropped
+      and string.format("Original: %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
+        originalFL, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+      or string.format("Original: %dmm  |  %d × %d  |  %.1f MP",
+        originalFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+
+    -- Initialize checkbox states and per-FL enabled properties
     local enabledCount = 0
     for _, fl in ipairs(standardFocalLengths) do
-      if fl > effectiveFL then
+      props["enabled_" .. fl] = fl > originalFL
+      if fl > originalFL then
         enabledCount = enabledCount + 1
         props["show_" .. fl] = (enabledCount <= 4)
       else
@@ -87,13 +132,117 @@ LrTasks.startAsyncTask(function()
       end
     end
 
+    -- Highlight crop dropdown state
+    props.highlightFL = 0  -- 0 = None
+    props.highlightFLItems = { { title = "None", value = 0 } }
+    props.renderWarning = ""
+
+    -- Get the active base FL for the current view mode
+    local function getActiveFL()
+      if props.viewMode == "cropped" then
+        return effectiveFL
+      else
+        return originalFL
+      end
+    end
+
+    -- Rebuild the highlight dropdown items from currently-checked and enabled FLs
+    local function rebuildHighlightItems()
+      local activeFL = getActiveFL()
+      local items = { { title = "None", value = 0 } }
+      for _, fl in ipairs(standardFocalLengths) do
+        if fl > activeFL and props["show_" .. fl] then
+          table.insert(items, { title = string.format("%dmm", fl), value = fl })
+        end
+      end
+      props.highlightFLItems = items
+
+      -- If the currently highlighted FL was unchecked, reset to None
+      local found = false
+      for _, item in ipairs(items) do
+        if item.value == props.highlightFL then
+          found = true
+          break
+        end
+      end
+      if not found then
+        props.highlightFL = 0
+      end
+    end
+
+    -- Update checkbox enabled states and header when view mode changes
+    local function onViewModeChanged()
+      local activeFL = getActiveFL()
+      if props.viewMode == "cropped" then
+        props.headerText = string.format("Shot at %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
+          originalFL, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)
+      else
+        props.headerText = isCropped
+          and string.format("Original: %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
+            originalFL, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+          or string.format("Original: %dmm  |  %d × %d  |  %.1f MP",
+            originalFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+      end
+
+      -- Update enabled states
+      local newlyEnabled = {}
+      for _, fl in ipairs(standardFocalLengths) do
+        local wasEnabled = props["enabled_" .. fl]
+        local nowEnabled = fl > activeFL
+        props["enabled_" .. fl] = nowEnabled
+        -- Uncheck FLs that become unavailable
+        if wasEnabled and not nowEnabled then
+          props["show_" .. fl] = false
+        end
+        -- Track newly enabled FLs (were disabled, now enabled)
+        if not wasEnabled and nowEnabled then
+          table.insert(newlyEnabled, fl)
+        end
+      end
+
+      -- Auto-select first 4 applicable FLs if none are currently checked in the new mode
+      local anyChecked = false
+      for _, fl in ipairs(standardFocalLengths) do
+        if fl > activeFL and props["show_" .. fl] then
+          anyChecked = true
+          break
+        end
+      end
+      if not anyChecked then
+        local count = 0
+        for _, fl in ipairs(standardFocalLengths) do
+          if fl > activeFL then
+            count = count + 1
+            props["show_" .. fl] = (count <= 4)
+          end
+        end
+      end
+
+      rebuildHighlightItems()
+    end
+
+    -- Observe checkbox changes to rebuild highlight dropdown
+    for _, fl in ipairs(standardFocalLengths) do
+      props:addObserver("show_" .. fl, function()
+        rebuildHighlightItems()
+      end)
+    end
+
+    -- Observe view mode changes
+    props:addObserver("viewMode", function()
+      onViewModeChanged()
+    end)
+
+    -- Build initial dropdown items
+    rebuildHighlightItems()
+
     -- Derive max display size from LR application window
     local appWidth, appHeight = LrSystemInfo.appWindowSize()
     local maxDisplayWidth = math.floor(appWidth * 0.7)
     local maxDisplayHeight = math.floor(appHeight * 0.6)
 
-    local aspectRatio = workingWidth / workingHeight
-
+    -- Display dimensions for full-frame view
+    local aspectRatio = imageWidth / imageHeight
     local displayWidth, displayHeight
     if aspectRatio > (maxDisplayWidth / maxDisplayHeight) then
       displayWidth = maxDisplayWidth
@@ -103,8 +252,24 @@ LrTasks.startAsyncTask(function()
       displayWidth = math.floor(maxDisplayHeight * aspectRatio)
     end
 
-    -- Calculate crop rects for focal lengths greater than effective FL
-    local allCropRects = FOVCalculator.calculateAllCropRects(effectiveFL, standardFocalLengths, workingWidth, workingHeight)
+    -- Display dimensions for cropped view
+    local croppedAspectRatio = croppedWidth / croppedHeight
+    local croppedDisplayWidth, croppedDisplayHeight
+    if croppedAspectRatio > (maxDisplayWidth / maxDisplayHeight) then
+      croppedDisplayWidth = maxDisplayWidth
+      croppedDisplayHeight = math.floor(maxDisplayWidth / croppedAspectRatio)
+    else
+      croppedDisplayHeight = maxDisplayHeight
+      croppedDisplayWidth = math.floor(maxDisplayHeight * croppedAspectRatio)
+    end
+
+    -- Crop rects for full-frame view (relative to full sensor, using originalFL)
+    local allCropRects = FOVCalculator.calculateAllCropRects(originalFL, standardFocalLengths, imageWidth, imageHeight)
+
+    -- Crop rects for cropped view (relative to cropped area, using effectiveFL)
+    local croppedCropRects = isCropped
+      and FOVCalculator.calculateAllCropRects(effectiveFL, standardFocalLengths, croppedWidth, croppedHeight)
+      or allCropRects
 
     -- Build the dialog
     local f = LrView.osFactory()
@@ -128,25 +293,23 @@ LrTasks.startAsyncTask(function()
 
     local availableIndex = 0
     for i, fl in ipairs(standardFocalLengths) do
-      local isAvailable = fl > effectiveFL
+      local isAvailable = fl > originalFL
 
-      -- Calculate crop info and assign color (only for available FLs)
-      local rect, colorName, colorLr
+      -- Calculate crop info and assign color (only for available FLs in full-frame mode)
+      local colorName, colorLr
       if isAvailable then
         availableIndex = availableIndex + 1
         local colorIndex = ((availableIndex - 1) % #colorNames) + 1
         colorName = colorNames[colorIndex]
         colorLr = legendColors[colorName]
-        rect = FOVCalculator.calculateCropRect(effectiveFL, fl, workingWidth, workingHeight)
       end
-      local mpText = rect and string.format("%.1fMP", rect.megapixels) or ""
 
       table.insert(currentRow, f:row {
         f:checkbox {
           value = LrView.bind("show_" .. fl),
           title = string.format("%dmm", fl),
           width = 70,
-          enabled = isAvailable,
+          enabled = LrView.bind("enabled_" .. fl),
         },
         f:static_text {
           title = isAvailable and "■" or "",
@@ -156,7 +319,7 @@ LrTasks.startAsyncTask(function()
           visible = isAvailable and LrView.bind("show_" .. fl) or false,
         },
         f:static_text {
-          title = mpText,
+          title = "",
           width = 45,
           font = "<system/small>",
           text_color = LrColor(0.5, 0.5, 0.5),
@@ -170,18 +333,13 @@ LrTasks.startAsyncTask(function()
       end
     end
 
-    -- Build image view: macOS uses overlapping PNG views, Windows uses PowerShell rendering
-    local imageView
-    if WIN_ENV then
-      imageView = FOVRenderer.createWindowsImageView(
-        photo, allCropRects, props, displayWidth, displayHeight,
-        workingWidth, workingHeight, standardFocalLengths
-      )
-    else
-      imageView = FOVRenderer.createImageWithBindableOverlays(
-        photo, allCropRects, props, displayWidth, displayHeight, workingWidth, workingHeight
-      )
-    end
+    -- Build image view: unified renderer (macOS JXA / Windows PowerShell, with legacy fallback)
+    local imageView = FOVRenderer.createUnifiedImageView(
+      photo, allCropRects, croppedCropRects, props,
+      displayWidth, displayHeight, imageWidth, imageHeight,
+      croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
+      standardFocalLengths, cropRect
+    )
 
     local contents = f:column {
       bind_to_object = props,
@@ -190,11 +348,7 @@ LrTasks.startAsyncTask(function()
       -- Header
       f:row {
         f:static_text {
-          title = isCropped
-            and string.format("Shot at %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-              originalFL, effectiveFL, workingWidth, workingHeight, (workingWidth * workingHeight) / 1000000)
-            or string.format("Original: %dmm  |  %d × %d  |  %.1f MP",
-              originalFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000),
+          title = LrView.bind("headerText"),
           font = "<system/bold>",
         },
       },
@@ -206,6 +360,41 @@ LrTasks.startAsyncTask(function()
         title = "Target Focal Lengths (select to show overlay)",
         fill_horizontal = 1,
         f:column(checkboxRows),
+      },
+
+      -- Highlight crop and view mode dropdowns
+      f:row {
+        f:static_text {
+          title = "View:",
+          alignment = "right",
+          width = 35,
+        },
+        f:popup_menu {
+          value = LrView.bind("viewMode"),
+          items = LrView.bind("viewModeItems"),
+          width = 110,
+          enabled = isCropped,
+        },
+        f:spacer { width = 15 },
+        f:static_text {
+          title = "Highlight crop:",
+          alignment = "right",
+          width = 90,
+        },
+        f:popup_menu {
+          value = LrView.bind("highlightFL"),
+          items = LrView.bind("highlightFLItems"),
+          width = 120,
+        },
+        f:static_text {
+          title = LrView.bind("renderWarning"),
+          text_color = LrColor(0.8, 0.5, 0),
+          font = "<system/small>",
+          visible = LrView.bind {
+            key = "renderWarning",
+            transform = function(value) return value ~= nil and value ~= "" end,
+          },
+        },
       },
 
       f:spacer { height = 10 },
