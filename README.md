@@ -6,10 +6,6 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 <img src="screenshot.png" alt="FOV Overlay Dialog" width="700"/>
 
-## Download
-
-**[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** and see detailed **[installation instructions](#installation)**.
-
 ## Features
 
 - Visualize crop areas for standard focal lengths (24mm–1200mm)
@@ -17,60 +13,16 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 - See remaining megapixels for each crop level
 - Crop-aware: detects Lightroom crop and calculates the equivalent focal length
 - Screen-aware dialog sizing — fits any display
-- 10 distinct color-coded corner overlays
+- 10 distinct color-coded overlays
+- One-click update checking from Plugin Manager
 
 ## Installation
 
-### macOS
-
-Open Terminal and run:
-
-```bash
-# Download and unzip
-cd ~/Downloads
-curl -L https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest/download/source.zip -o fov-overlay.zip \
-  || curl -L $(curl -s https://api.github.com/repos/KalinKanev/lightroom-fov-overlay/releases/latest | grep zipball_url | cut -d '"' -f 4) -o fov-overlay.zip
-unzip fov-overlay.zip
-
-# Remove old version (if updating)
-rm -rf "$HOME/Library/Application Support/Adobe/Lightroom/Modules/fovoverlay.lrplugin"
-
-# Install — adjust the folder name to match the extracted zip
-cp -R KalinKanev-lightroom-fov-overlay-*/fovoverlay.lrplugin "$HOME/Library/Application Support/Adobe/Lightroom/Modules/"
-```
-
-Then in Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
-
-### Windows
-
-Open PowerShell and run:
-
-```powershell
-# Download and unzip
-cd $env:USERPROFILE\Downloads
-Invoke-WebRequest -Uri "https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest" -OutFile fov-overlay.zip -MaximumRedirection 5
-Expand-Archive -Path fov-overlay.zip -DestinationPath fov-overlay -Force
-
-# Remove old version (if updating)
-Remove-Item -Recurse -Force "$env:APPDATA\Adobe\Lightroom\Modules\fovoverlay.lrplugin" -ErrorAction SilentlyContinue
-
-# Install
-Copy-Item -Recurse (Get-ChildItem fov-overlay\*\fovoverlay.lrplugin).FullName "$env:APPDATA\Adobe\Lightroom\Modules\"
-```
-
-Then in Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
-
-### Manual installation
-
-If you prefer not to use the command line:
-
-1. **[Download the plugin package](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** — click "Source code (zip)".
+1. **[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** — click "Source code (zip)".
 2. Unzip and locate the `fovoverlay.lrplugin` folder inside.
-3. If updating, remove the old `fovoverlay.lrplugin` from your plugins folder first.
-4. Copy `fovoverlay.lrplugin` to your Lightroom plugins folder:
-   - **macOS**: `~/Library/Application Support/Adobe/Lightroom/Modules/`
-   - **Windows**: `%APPDATA%\Adobe\Lightroom\Modules\`
-5. In Lightroom: `File > Plug-in Manager` — click `Add` (new install) or `Reload Plug-in` (update).
+3. In Lightroom: `File > Plug-in Manager` — click `Add` and select the `fovoverlay.lrplugin` folder.
+
+To update, use the **Check for Updates** button in the Plugin Manager, or repeat the steps above and click `Reload Plug-in`.
 
 ## Usage
 
