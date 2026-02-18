@@ -227,10 +227,10 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
   for _, tag in ipairs(tags) do
     local cmd
     if WIN_ENV then
-      -- Write a PowerShell script to extract the preview (same pattern as renderWindowsOverlay)
-      local scriptPath = LrPathUtils.child(tempPath, "fov_extract.ps1")
+      -- Write a .bat file with simple cmd redirect (PowerShell Set-Content doesn't handle binary pipes)
+      local scriptPath = LrPathUtils.child(tempPath, "fov_extract.bat")
       local script = string.format(
-        '& "%s" -b -%s "%s" | Set-Content -Path "%s" -Encoding Byte',
+        '@"%s" -b -%s "%s" > "%s"',
         exiftoolPath, tag, rawFilePath, outputPath)
 
       if FOVRenderer.DEBUG_EXIFTOOL then
@@ -252,8 +252,7 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
           table.insert(debugLog, "Script written: FAILED (io.open returned nil)")
         end
       end
-      local cmdline = 'powershell -ExecutionPolicy Bypass -NoProfile -File "' .. scriptPath .. '"'
-      cmd = '"' .. cmdline .. '"'
+      cmd = '"' .. scriptPath .. '"'
 
       if FOVRenderer.DEBUG_EXIFTOOL then
         table.insert(debugLog, "Command: " .. cmd)

@@ -61,17 +61,16 @@ LrTasks.startAsyncTask(function()
           local tmpOut = LrPathUtils.child(tmpDir, "fov_fl35mm.txt")
           local cmd
           if WIN_ENV then
-            local scriptPath = LrPathUtils.child(tmpDir, "fov_fl35mm.ps1")
+            local scriptPath = LrPathUtils.child(tmpDir, "fov_fl35mm.bat")
             local script = string.format(
-              '& "%s" -s3 -FocalLengthIn35mmFormat "%s" | Set-Content -Path "%s"',
+              '@"%s" -s3 -FocalLengthIn35mmFormat "%s" > "%s"',
               exifToolPath, filePath, tmpOut)
             local sf = io.open(scriptPath, "w+b")
             if sf then
               sf:write(script)
               sf:close()
             end
-            local cmdline = 'powershell -ExecutionPolicy Bypass -NoProfile -File "' .. scriptPath .. '"'
-            cmd = '"' .. cmdline .. '"'
+            cmd = '"' .. scriptPath .. '"'
           else
             local singleQuoteWrap = '\'"\'"\''
             local et = exifToolPath:gsub("'", singleQuoteWrap)
