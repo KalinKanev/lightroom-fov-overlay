@@ -39,13 +39,41 @@ LrTasks.startAsyncTask(function()
     local focalLengthStr = photo:getFormattedMetadata("focalLength")
     local dimensionsStr = photo:getFormattedMetadata("dimensions")
 
-    local originalFL = FOVCalculator.parseFocalLength(focalLengthStr)
+    local lensFL = FOVCalculator.parseFocalLength(focalLengthStr)
     local imageWidth, imageHeight = FOVCalculator.parseDimensions(dimensionsStr)
 
-    if not originalFL then
+    if not lensFL then
       LrDialogs.message("FOV Overlay", "Could not read focal length from photo metadata.\n\nFocal Length: " .. tostring(focalLengthStr), "warning")
       return
     end
+
+    -- Get 35mm equivalent focal length for correct FOV on crop sensors
+    local fl35mm = photo:getRawMetadata("focalLength35mm")
+    if not fl35mm or fl35mm <= 0 then
+      -- Try ExifTool as fallback (covers Canon and other cameras that don't write this EXIF tag)
+      local exifToolPath = FOVRenderer.findExifTool()
+      if exifToolPath then
+        local filePath = photo:getRawMetadata("path")
+        if filePath then
+          local cmd = string.format('"%s" -s3 -FocalLengthIn35mmFormat "%s"', exifToolPath, filePath)
+          local handle = io.popen(cmd)
+          if handle then
+            local result = handle:read("*a")
+            handle:close()
+            if result then
+              local val = tonumber(result:match("(%d+%.?%d*)"))
+              if val and val > 0 then
+                fl35mm = val
+              end
+            end
+          end
+        end
+      end
+    end
+
+    -- Use 35mm equiv as the base for FOV calculations; fall back to lens FL
+    local originalFL = (fl35mm and fl35mm > 0) and math.floor(fl35mm + 0.5) or lensFL
+    local isCropSensor = (originalFL > lensFL + 0.5)
 
     if not imageWidth or not imageHeight then
       LrDialogs.message("FOV Overlay", "Could not read image dimensions from photo metadata.", "warning")
@@ -114,11 +142,34 @@ LrTasks.startAsyncTask(function()
       or  { { title = "Full Frame", value = "full" } }
 
     -- Header text (reactive to viewMode)
-    props.headerText = isCropped
-      and string.format("Original: %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-        originalFL, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
-      or string.format("Original: %dmm  |  %d × %d  |  %.1f MP",
-        originalFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+    local function buildFullFrameHeader()
+      local flLabel
+      if isCropSensor then
+        flLabel = string.format("Lens: %dmm (≈%dmm FF)", lensFL, originalFL)
+      else
+        flLabel = string.format("Original: %dmm", originalFL)
+      end
+      if isCropped then
+        return string.format("%s  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
+          flLabel, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+      else
+        return string.format("%s  |  %d × %d  |  %.1f MP",
+          flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+      end
+    end
+
+    local function buildCroppedHeader()
+      local flLabel
+      if isCropSensor then
+        flLabel = string.format("Lens: %dmm (≈%dmm FF)", lensFL, originalFL)
+      else
+        flLabel = string.format("Shot at %dmm", originalFL)
+      end
+      return string.format("%s  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
+        flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)
+    end
+
+    props.headerText = buildFullFrameHeader()
 
     -- Initialize checkbox states and per-FL enabled properties
     local enabledCount = 0
@@ -174,14 +225,9 @@ LrTasks.startAsyncTask(function()
     local function onViewModeChanged()
       local activeFL = getActiveFL()
       if props.viewMode == "cropped" then
-        props.headerText = string.format("Shot at %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-          originalFL, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)
+        props.headerText = buildCroppedHeader()
       else
-        props.headerText = isCropped
-          and string.format("Original: %dmm  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-            originalFL, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
-          or string.format("Original: %dmm  |  %d × %d  |  %.1f MP",
-            originalFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+        props.headerText = buildFullFrameHeader()
       end
 
       -- Update enabled states
