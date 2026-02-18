@@ -200,21 +200,12 @@ LrTasks.startAsyncTask(function()
         end
       end
 
-      -- Auto-select first 4 applicable FLs if none are currently checked in the new mode
-      local anyChecked = false
+      -- Always re-select the 4 widest (closest to base FL) available FOVs
+      local count = 0
       for _, fl in ipairs(standardFocalLengths) do
-        if fl > activeFL and props["show_" .. fl] then
-          anyChecked = true
-          break
-        end
-      end
-      if not anyChecked then
-        local count = 0
-        for _, fl in ipairs(standardFocalLengths) do
-          if fl > activeFL then
-            count = count + 1
-            props["show_" .. fl] = (count <= 4)
-          end
+        if fl > activeFL then
+          count = count + 1
+          props["show_" .. fl] = (count <= 4)
         end
       end
 
@@ -270,6 +261,16 @@ LrTasks.startAsyncTask(function()
     local croppedCropRects = isCropped
       and FOVCalculator.calculateAllCropRects(effectiveFL, standardFocalLengths, croppedWidth, croppedHeight)
       or allCropRects
+
+    -- Assign fixed color index per FL based on full-frame position (consistent across view modes)
+    local flToColorIndex = {}
+    for i, rect in ipairs(allCropRects) do
+      flToColorIndex[rect.focalLength] = ((i - 1) % #FOVRenderer.colorNames) + 1
+      rect.colorIndex = flToColorIndex[rect.focalLength]
+    end
+    for _, rect in ipairs(croppedCropRects) do
+      rect.colorIndex = flToColorIndex[rect.focalLength] or ((1 - 1) % #FOVRenderer.colorNames) + 1
+    end
 
     -- Build the dialog
     local f = LrView.osFactory()

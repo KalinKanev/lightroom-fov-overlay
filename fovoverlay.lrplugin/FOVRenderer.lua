@@ -107,7 +107,7 @@ function FOVRenderer.createLegacyImageView(photo, allCropRects, props, displayWi
 
   local overlayViews = {}
   for i, rect in ipairs(allCropRects) do
-    local colorIndex = ((i - 1) % #FOVRenderer.colorNames) + 1
+    local colorIndex = rect.colorIndex or (((i - 1) % #FOVRenderer.colorNames) + 1)
     local colorName = FOVRenderer.colorNames[colorIndex]
 
     local corners = FOVRenderer.createCornerOverlays(
@@ -377,7 +377,7 @@ function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, d
     end
 
     if isEnabled then
-      local colorIndex = ((i - 1) % #FOVRenderer.colorNames) + 1
+      local colorIndex = rect.colorIndex or (((i - 1) % #FOVRenderer.colorNames) + 1)
       local colorName = FOVRenderer.colorNames[colorIndex]
       local rgb = FOVRenderer.colorRGB[colorName]
 
@@ -545,7 +545,7 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
     end
 
     if isEnabled then
-      local colorIndex = ((i - 1) % #FOVRenderer.colorNames) + 1
+      local colorIndex = rect.colorIndex or (((i - 1) % #FOVRenderer.colorNames) + 1)
       local colorName = FOVRenderer.colorNames[colorIndex]
       local rgb = FOVRenderer.colorRGB[colorName]
 
