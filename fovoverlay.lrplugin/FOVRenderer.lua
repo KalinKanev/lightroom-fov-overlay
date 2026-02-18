@@ -16,7 +16,7 @@ local LrDialogs = import 'LrDialogs'
 local FOVRenderer = {}
 
 -- Debug flag: set to true to show diagnostic dialog for ExifTool extraction
-FOVRenderer.DEBUG_EXIFTOOL = true
+FOVRenderer.DEBUG_EXIFTOOL = false
 
 -- RAW file extensions that may contain an embedded JPEG preview
 FOVRenderer.rawExtensions = {
