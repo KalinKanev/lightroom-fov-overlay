@@ -9,18 +9,23 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 ## Features
 
 - Visualize crop areas for standard focal lengths (24mm–1200mm)
+- **Full uncropped frame view** — see the original sensor frame with Lightroom crop visualized as a darkened overlay (supports angled crops)
+- **Crop sensor support** — automatically uses 35mm equivalent focal length for correct FOV on APS-C, Micro Four Thirds, etc.
+- Switch between **Full Frame** and **Cropped** views via dropdown
 - Toggle individual focal lengths on/off with checkboxes
 - See remaining megapixels for each crop level
-- Crop-aware: detects Lightroom crop and calculates the equivalent focal length
+- Highlight a specific crop with dimming outside the rectangle
+- 10 distinct color-coded overlays at 50% opacity
 - Screen-aware dialog sizing — fits any display
-- 10 distinct color-coded overlays
 - One-click update checking from Plugin Manager
 
 ## Installation
 
-1. **[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** — click "Source code (zip)".
-2. Unzip and locate the `fovoverlay.lrplugin` folder inside.
+1. **[Download the latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest)** — download `fovoverlay.lrplugin.zip` from the Assets section.
+2. Unzip to get the `fovoverlay.lrplugin` folder.
 3. In Lightroom: `File > Plug-in Manager` — click `Add` and select the `fovoverlay.lrplugin` folder.
+
+The download includes bundled ExifTool binaries for both macOS and Windows, required for the full uncropped frame view on RAW files.
 
 To update, use the **Check for Updates** button in the Plugin Manager, or repeat the steps above and click `Reload Plug-in`.
 
@@ -28,21 +33,31 @@ To update, use the **Check for Updates** button in the Plugin Manager, or repeat
 
 1. Select a photo in the **Library** module.
 2. Go to `Library > Plug-in Extras > Show FOV Guides`.
-3. The dialog shows your image with crop rectangles for focal lengths longer than what the photo was shot at (or cropped to).
+3. The dialog shows your image with crop rectangles for focal lengths longer than what the photo was shot at.
 4. Use the checkboxes to toggle individual focal lengths on or off.
-5. Click **Close** to dismiss the dialog.
+5. Use the **View** dropdown to switch between Full Frame and Cropped views.
+6. Use the **Highlight crop** dropdown to dim everything outside a specific focal length rectangle.
+7. Click **Close** to dismiss the dialog.
 
 ### Cropped Images
 
 If the selected photo has a Lightroom crop applied, the plugin automatically:
+- Shows the **full uncropped frame** with the crop area highlighted (requires ExifTool, bundled in the release)
 - Calculates the **equivalent focal length** based on the crop (e.g., a 200mm shot cropped to 50% width = 400mm equivalent)
-- Shows the effective focal length in the header
-- Only enables focal lengths longer than the equivalent
-- Grays out focal lengths that are already exceeded by the crop
+- Lets you switch between Full Frame and Cropped views
+- Supports **angled/rotated crops** with accurate polygon overlay
+
+### Crop Sensor Cameras
+
+The plugin reads the 35mm equivalent focal length from EXIF metadata. On crop sensor cameras (APS-C, Micro Four Thirds, etc.), the header shows both the actual lens focal length and the full-frame equivalent:
+
+> Lens: 300mm (≈450mm FF) | 6000 × 4000 | 24.0 MP
+
+FOV guide rectangles represent correct full-frame equivalent focal lengths regardless of sensor size.
 
 ### Understanding the Overlays
 
-Each overlay rectangle shows how much of the current image you would need to crop to match the field of view of a longer focal length. The megapixel count next to each checkbox tells you how much resolution remains after that crop.
+Each overlay rectangle shows how much of the current image you would need to crop to match the field of view of a longer focal length.
 
 Each selected focal length gets a unique color from the palette: green, yellow, orange, red, cyan, magenta, blue, lime, pink, white.
 
@@ -53,7 +68,7 @@ Each selected focal length gets a unique color from the palette: green, yellow, 
 
 ## How It Works
 
-The plugin reads the photo's EXIF focal length and image dimensions. For each target focal length, it computes:
+The plugin reads the photo's EXIF focal length (35mm equivalent when available) and image dimensions. For each target focal length, it computes:
 
 ```
 Crop Ratio = Target FL / Original FL
@@ -61,17 +76,17 @@ Crop Width = Image Width / Crop Ratio
 Crop Height = Image Height / Crop Ratio
 ```
 
-The resulting rectangle is centered on the image and drawn as colored corner markers.
+The resulting rectangle is centered on the image and drawn as a colored outline.
+
+For the full uncropped frame view, the plugin extracts the embedded JPEG preview from RAW files using ExifTool (bundled). For JPEG files, it uses the original file directly.
 
 ## Troubleshooting
 
-### Overlay markers not showing
+### Full frame view not available
 
-If the colored corner markers don't appear on the image:
-
-1. Make sure the `assets` folder with all PNG files is present inside `fovoverlay.lrplugin`
-2. Try removing and reinstalling the plugin using the commands above
-3. In Lightroom: `File > Plug-in Manager`, select the plugin, click `Reload Plug-in`
+If you see "Full frame unavailable — showing cropped view only":
+- Make sure the `bin` folder with ExifTool is present inside `fovoverlay.lrplugin`
+- Re-download from the [latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest) — use `fovoverlay.lrplugin.zip` (not "Source code")
 
 ### Dialog too large or Close button not visible
 
