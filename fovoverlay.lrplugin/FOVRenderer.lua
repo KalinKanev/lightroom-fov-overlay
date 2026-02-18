@@ -211,8 +211,12 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
   for _, tag in ipairs(tags) do
     local cmd
     if WIN_ENV then
-      cmd = string.format('"""%s" -b -%s "%s" > "%s"""',
-        exiftoolPath, tag, rawFilePath, outputPath)
+      -- Use PowerShell for reliable quoting and redirection on Windows
+      cmd = string.format(
+        'powershell -NoProfile -Command "& \'%s\' -b -%s \'%s\' | Set-Content -Path \'%s\' -Encoding Byte"',
+        exiftoolPath:gsub("'", "''"), tag,
+        rawFilePath:gsub("'", "''"),
+        outputPath:gsub("'", "''"))
     else
       local et = exiftoolPath:gsub("'", singleQuoteWrap)
       local rf = rawFilePath:gsub("'", singleQuoteWrap)
@@ -223,7 +227,7 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
     local rc = LrTasks.execute(cmd)
 
     if WIN_ENV then
-      LrTasks.sleep(0.02)
+      LrTasks.sleep(0.1)
       LrTasks.yield()
     end
 

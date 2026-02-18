@@ -14,6 +14,8 @@ local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
 local LrSystemInfo = import 'LrSystemInfo'
+local LrFileUtils = import 'LrFileUtils'
+local LrPathUtils = import 'LrPathUtils'
 
 local FOVCalculator = require 'FOVCalculator'
 local FOVRenderer = require 'FOVRenderer'
@@ -55,17 +57,36 @@ LrTasks.startAsyncTask(function()
       if exifToolPath then
         local filePath = photo:getRawMetadata("path")
         if filePath then
-          local cmd = string.format('"%s" -s3 -FocalLengthIn35mmFormat "%s"', exifToolPath, filePath)
-          local handle = io.popen(cmd)
-          if handle then
-            local result = handle:read("*a")
-            handle:close()
-            if result then
-              local val = tonumber(result:match("(%d+%.?%d*)"))
-              if val and val > 0 then
-                fl35mm = val
+          local tmpDir = LrPathUtils.getStandardFilePath("temp")
+          local tmpOut = LrPathUtils.child(tmpDir, "fov_fl35mm.txt")
+          local cmd
+          if WIN_ENV then
+            cmd = string.format(
+              'powershell -NoProfile -Command "& \'%s\' -s3 -FocalLengthIn35mmFormat \'%s\' | Set-Content -Path \'%s\'"',
+              exifToolPath:gsub("'", "''"),
+              filePath:gsub("'", "''"),
+              tmpOut:gsub("'", "''"))
+          else
+            local singleQuoteWrap = '\'"\'"\''
+            local et = exifToolPath:gsub("'", singleQuoteWrap)
+            local rf = filePath:gsub("'", singleQuoteWrap)
+            cmd = string.format("'%s' -s3 -FocalLengthIn35mmFormat '%s' > '%s'",
+              et, rf, tmpOut)
+          end
+          LrTasks.execute(cmd)
+          if LrFileUtils.exists(tmpOut) then
+            local f = io.open(tmpOut, "r")
+            if f then
+              local result = f:read("*a")
+              f:close()
+              if result then
+                local val = tonumber(result:match("(%d+%.?%d*)"))
+                if val and val > 0 then
+                  fl35mm = val
+                end
               end
             end
+            LrFileUtils.delete(tmpOut)
           end
         end
       end
