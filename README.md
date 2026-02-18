@@ -45,7 +45,7 @@ If the selected photo has a Lightroom crop applied, the plugin automatically:
 - Shows the **full uncropped frame** with the crop area highlighted (requires ExifTool, bundled in the release)
 - Calculates the **equivalent focal length** based on the crop (e.g., a 200mm shot cropped to 50% width = 400mm equivalent)
 - Lets you switch between Full Frame and Cropped views
-- Supports **angled/rotated crops** with accurate polygon overlay
+- Supports angled/rotated crops (overlay positioning may be approximate for heavily tilted crops)
 
 ### Crop Sensor Cameras
 
@@ -87,6 +87,10 @@ For the full uncropped frame view, the plugin extracts the embedded JPEG preview
 If you see "Full frame unavailable — showing cropped view only":
 - Make sure the `bin` folder with ExifTool is present inside `fovoverlay.lrplugin`
 - Re-download from the [latest release](https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest) — use `fovoverlay.lrplugin.zip` (not "Source code")
+
+### Tilted/angled crops
+
+The crop overlay for angled crops is approximate. Heavily tilted crops may show slight misalignment between the overlay and the actual crop boundary.
 
 ### Dialog too large or Close button not visible
 
