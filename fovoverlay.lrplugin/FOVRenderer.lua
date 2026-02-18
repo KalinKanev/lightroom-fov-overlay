@@ -11,8 +11,12 @@ local LrView = import 'LrView'
 local LrPathUtils = import 'LrPathUtils'
 local LrFileUtils = import 'LrFileUtils'
 local LrTasks = import 'LrTasks'
+local LrDialogs = import 'LrDialogs'
 
 local FOVRenderer = {}
+
+-- Debug flag: set to true to show diagnostic dialog for ExifTool extraction
+FOVRenderer.DEBUG_EXIFTOOL = true
 
 -- RAW file extensions that may contain an embedded JPEG preview
 FOVRenderer.rawExtensions = {
@@ -199,6 +203,18 @@ end
 function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
   local tempPath = LrPathUtils.getStandardFilePath("temp")
   local outputPath = LrPathUtils.child(tempPath, "fov_uncropped.jpg")
+  local debugLog = {}
+
+  if FOVRenderer.DEBUG_EXIFTOOL then
+    table.insert(debugLog, "ExifTool path: " .. tostring(exiftoolPath))
+    table.insert(debugLog, "ExifTool exists: " .. tostring(LrFileUtils.exists(exiftoolPath)))
+    table.insert(debugLog, "RAW file: " .. tostring(rawFilePath))
+    table.insert(debugLog, "RAW exists: " .. tostring(LrFileUtils.exists(rawFilePath)))
+    table.insert(debugLog, "Temp dir: " .. tostring(tempPath))
+    table.insert(debugLog, "Output path: " .. tostring(outputPath))
+    table.insert(debugLog, "WIN_ENV: " .. tostring(WIN_ENV))
+    table.insert(debugLog, "")
+  end
 
   if LrFileUtils.exists(outputPath) then
     LrFileUtils.delete(outputPath)
@@ -216,13 +232,32 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
       local script = string.format(
         '& "%s" -b -%s "%s" | Set-Content -Path "%s" -Encoding Byte',
         exiftoolPath, tag, rawFilePath, outputPath)
+
+      if FOVRenderer.DEBUG_EXIFTOOL then
+        table.insert(debugLog, "Tag: " .. tag)
+        table.insert(debugLog, "Script path: " .. tostring(scriptPath))
+        table.insert(debugLog, "Script content: " .. script)
+      end
+
       local sf = io.open(scriptPath, "w+b")
       if sf then
         sf:write(script)
         sf:close()
+        if FOVRenderer.DEBUG_EXIFTOOL then
+          table.insert(debugLog, "Script written: YES")
+          table.insert(debugLog, "Script exists: " .. tostring(LrFileUtils.exists(scriptPath)))
+        end
+      else
+        if FOVRenderer.DEBUG_EXIFTOOL then
+          table.insert(debugLog, "Script written: FAILED (io.open returned nil)")
+        end
       end
       local cmdline = 'powershell -ExecutionPolicy Bypass -NoProfile -File "' .. scriptPath .. '"'
       cmd = '"' .. cmdline .. '"'
+
+      if FOVRenderer.DEBUG_EXIFTOOL then
+        table.insert(debugLog, "Command: " .. cmd)
+      end
     else
       local et = exiftoolPath:gsub("'", singleQuoteWrap)
       local rf = rawFilePath:gsub("'", singleQuoteWrap)
@@ -237,18 +272,44 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
       LrTasks.yield()
     end
 
+    if FOVRenderer.DEBUG_EXIFTOOL then
+      table.insert(debugLog, "Exit code: " .. tostring(rc))
+      table.insert(debugLog, "Output exists: " .. tostring(LrFileUtils.exists(outputPath)))
+    end
+
     -- Check if extraction produced a valid file (> 1KB to filter out tiny thumbnails)
     if rc == 0 and LrFileUtils.exists(outputPath) then
       local fileAttrs = LrFileUtils.fileAttributes(outputPath)
-      if fileAttrs and fileAttrs.fileSize and fileAttrs.fileSize > 1024 then
+      local fileSize = fileAttrs and fileAttrs.fileSize or 0
+
+      if FOVRenderer.DEBUG_EXIFTOOL then
+        table.insert(debugLog, "File size: " .. tostring(fileSize))
+      end
+
+      if fileSize > 1024 then
+        if FOVRenderer.DEBUG_EXIFTOOL then
+          table.insert(debugLog, "")
+          table.insert(debugLog, "SUCCESS: Extracted with " .. tag)
+          LrDialogs.message("FOV Debug: ExifTool", table.concat(debugLog, "\n"), "info")
+        end
         return outputPath
       end
+    end
+
+    if FOVRenderer.DEBUG_EXIFTOOL then
+      table.insert(debugLog, "FAILED for tag " .. tag)
+      table.insert(debugLog, "")
     end
 
     -- Clean up failed attempt before trying next tag
     if LrFileUtils.exists(outputPath) then
       LrFileUtils.delete(outputPath)
     end
+  end
+
+  if FOVRenderer.DEBUG_EXIFTOOL then
+    table.insert(debugLog, "ALL TAGS FAILED — returning nil")
+    LrDialogs.message("FOV Debug: ExifTool", table.concat(debugLog, "\n"), "warning")
   end
 
   return nil
@@ -281,11 +342,20 @@ function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
   -- RAW files: try ExifTool extraction
   if FOVRenderer.rawExtensions[ext] then
     local exiftoolPath = FOVRenderer.findExifTool()
+    if FOVRenderer.DEBUG_EXIFTOOL and not exiftoolPath then
+      LrDialogs.message("FOV Debug", "ExifTool NOT found.\n\nPlugin path: " .. tostring(_PLUGIN.path) ..
+        "\nBin path: " .. tostring(LrPathUtils.child(_PLUGIN.path, "bin")) ..
+        "\nExpected: " .. (WIN_ENV and "bin\\exiftool.exe" or "bin/exiftool/exiftool"), "warning")
+    end
     if exiftoolPath then
       local previewPath = FOVRenderer.extractRawPreview(exiftoolPath, originalPath)
       if previewPath then
         return { path = previewPath, isUncropped = true }
       end
+    end
+  else
+    if FOVRenderer.DEBUG_EXIFTOOL then
+      LrDialogs.message("FOV Debug", "Extension '" .. ext .. "' not in rawExtensions table.\nPath: " .. tostring(originalPath), "info")
     end
   end
 
