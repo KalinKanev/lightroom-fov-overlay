@@ -14,7 +14,12 @@ local LrTasks     = import 'LrTasks'
 
 local FOVInfoProvider = {}
 
-local PLUGIN_VERSION = { major = 1, minor = 1, revision = 4 }
+local Info = require 'Info'
+local PLUGIN_VERSION = {
+  major    = Info.VERSION.major,
+  minor    = Info.VERSION.minor,
+  revision = Info.VERSION.revision,
+}
 
 local GITHUB_API_URL     = "https://api.github.com/repos/KalinKanev/lightroom-fov-overlay/releases/latest"
 local GITHUB_RELEASES_URL = "https://github.com/KalinKanev/lightroom-fov-overlay/releases/latest"
@@ -74,12 +79,7 @@ local function autoInstall(tagName)
   local pluginPath = _PLUGIN.path
   local zipURL = "https://github.com/KalinKanev/lightroom-fov-overlay/archive/refs/tags/" .. tagName .. ".zip"
 
-  local tmpDir
-  if WIN_ENV then
-    tmpDir = os.getenv("TEMP") or os.getenv("TMP") or "C:\\Temp"
-  else
-    tmpDir = "/tmp"
-  end
+  local tmpDir = LrPathUtils.getStandardFilePath("temp")
 
   local zipPath    = LrPathUtils.child(tmpDir, "fov-update.zip")
   local extractDir = LrPathUtils.child(tmpDir, "fov-update")

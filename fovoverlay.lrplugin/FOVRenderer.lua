@@ -383,7 +383,7 @@ function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, d
 
       -- NSImage coordinate system is flipped (origin bottom-left), so invert Y
       table.insert(lines, string.format(
-        "var color%d = $.NSColor.colorWithCalibratedRedGreenBlueAlpha(%s, %s, %s, 1.0)",
+        "var color%d = $.NSColor.colorWithCalibratedRedGreenBlueAlpha(%s, %s, %s, 0.5)",
         i, rgb[1] / 255, rgb[2] / 255, rgb[3] / 255))
       table.insert(lines, string.format("color%d.set", i))
 
@@ -550,7 +550,7 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
       local rgb = FOVRenderer.colorRGB[colorName]
 
       table.insert(lines, string.format(
-        '$p = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, %d, %d, %d), $pw)',
+        '$p = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(128, %d, %d, %d), $pw)',
         rgb[1], rgb[2], rgb[3]))
 
       table.insert(lines, string.format('$left = [math]::Floor(%d * $scaleX)', rect.left))
