@@ -77,7 +77,8 @@ end
 
 local function autoInstall(tagName)
   local pluginPath = _PLUGIN.path
-  local zipURL = "https://github.com/KalinKanev/lightroom-fov-overlay/archive/refs/tags/" .. tagName .. ".zip"
+  -- Download the release asset (complete plugin with ExifTool binaries)
+  local zipURL = "https://github.com/KalinKanev/lightroom-fov-overlay/releases/download/" .. tagName .. "/fovoverlay.lrplugin.zip"
 
   local tmpDir = LrPathUtils.getStandardFilePath("temp")
 
@@ -119,12 +120,12 @@ local function autoInstall(tagName)
   end
 
   -- Copy extracted plugin contents over the current plugin path
-  -- The zip extracts to: fov-update/lightroom-fov-overlay-<tag>/fovoverlay.lrplugin/
+  -- The zip extracts to: fov-update/fovoverlay.lrplugin/
   local copyCmd
   if WIN_ENV then
-    copyCmd = 'powershell -Command "Copy-Item -Recurse -Force \'' .. extractDir .. '\\*\\fovoverlay.lrplugin\\*\' \'' .. pluginPath .. '\\\'"'
+    copyCmd = 'powershell -Command "Copy-Item -Recurse -Force \'' .. extractDir .. '\\fovoverlay.lrplugin\\*\' \'' .. pluginPath .. '\\\'"'
   else
-    copyCmd = 'cp -R "' .. extractDir .. '"/*/fovoverlay.lrplugin/* "' .. pluginPath .. '/"'
+    copyCmd = 'cp -R "' .. extractDir .. '"/fovoverlay.lrplugin/* "' .. pluginPath .. '/"'
   end
 
   rc = LrTasks.execute(copyCmd)

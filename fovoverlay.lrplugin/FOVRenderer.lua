@@ -644,7 +644,12 @@ function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRect
   local croppedBasePath = FOVRenderer.exportBaseImage(photo, croppedDisplayWidth, croppedDisplayHeight)
   local hasUncropped = uncroppedResult.isUncropped
 
-  if not hasUncropped then
+  if not hasUncropped and not cropRect then
+    -- Image is not cropped — requestJpegThumbnail returns the full frame anyway
+    -- Treat it as uncropped so full-frame view works normally
+    hasUncropped = true
+  elseif not hasUncropped and cropRect then
+    -- Image is cropped but we can't get the full frame — force cropped view
     props.renderWarning = "Full frame unavailable — showing cropped view only."
     props.viewMode = "cropped"
   end
