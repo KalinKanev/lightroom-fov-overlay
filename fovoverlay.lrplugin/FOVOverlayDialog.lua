@@ -61,11 +61,17 @@ LrTasks.startAsyncTask(function()
           local tmpOut = LrPathUtils.child(tmpDir, "fov_fl35mm.txt")
           local cmd
           if WIN_ENV then
-            cmd = string.format(
-              'powershell -NoProfile -Command "& \'%s\' -s3 -FocalLengthIn35mmFormat \'%s\' | Set-Content -Path \'%s\'"',
-              exifToolPath:gsub("'", "''"),
-              filePath:gsub("'", "''"),
-              tmpOut:gsub("'", "''"))
+            local scriptPath = LrPathUtils.child(tmpDir, "fov_fl35mm.ps1")
+            local script = string.format(
+              '& "%s" -s3 -FocalLengthIn35mmFormat "%s" | Set-Content -Path "%s"',
+              exifToolPath, filePath, tmpOut)
+            local sf = io.open(scriptPath, "w+b")
+            if sf then
+              sf:write(script)
+              sf:close()
+            end
+            local cmdline = 'powershell -ExecutionPolicy Bypass -NoProfile -File "' .. scriptPath .. '"'
+            cmd = '"' .. cmdline .. '"'
           else
             local singleQuoteWrap = '\'"\'"\''
             local et = exifToolPath:gsub("'", singleQuoteWrap)
@@ -75,10 +81,10 @@ LrTasks.startAsyncTask(function()
           end
           LrTasks.execute(cmd)
           if LrFileUtils.exists(tmpOut) then
-            local f = io.open(tmpOut, "r")
-            if f then
-              local result = f:read("*a")
-              f:close()
+            local fh = io.open(tmpOut, "r")
+            if fh then
+              local result = fh:read("*a")
+              fh:close()
               if result then
                 local val = tonumber(result:match("(%d+%.?%d*)"))
                 if val and val > 0 then

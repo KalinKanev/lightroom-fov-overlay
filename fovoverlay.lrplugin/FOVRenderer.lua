@@ -211,12 +211,18 @@ function FOVRenderer.extractRawPreview(exiftoolPath, rawFilePath)
   for _, tag in ipairs(tags) do
     local cmd
     if WIN_ENV then
-      -- Use PowerShell for reliable quoting and redirection on Windows
-      cmd = string.format(
-        'powershell -NoProfile -Command "& \'%s\' -b -%s \'%s\' | Set-Content -Path \'%s\' -Encoding Byte"',
-        exiftoolPath:gsub("'", "''"), tag,
-        rawFilePath:gsub("'", "''"),
-        outputPath:gsub("'", "''"))
+      -- Write a PowerShell script to extract the preview (same pattern as renderWindowsOverlay)
+      local scriptPath = LrPathUtils.child(tempPath, "fov_extract.ps1")
+      local script = string.format(
+        '& "%s" -b -%s "%s" | Set-Content -Path "%s" -Encoding Byte',
+        exiftoolPath, tag, rawFilePath, outputPath)
+      local sf = io.open(scriptPath, "w+b")
+      if sf then
+        sf:write(script)
+        sf:close()
+      end
+      local cmdline = 'powershell -ExecutionPolicy Bypass -NoProfile -File "' .. scriptPath .. '"'
+      cmd = '"' .. cmdline .. '"'
     else
       local et = exiftoolPath:gsub("'", singleQuoteWrap)
       local rf = rawFilePath:gsub("'", singleQuoteWrap)
