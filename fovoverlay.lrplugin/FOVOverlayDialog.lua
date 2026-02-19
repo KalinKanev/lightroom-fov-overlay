@@ -364,11 +364,20 @@ LrTasks.startAsyncTask(function()
       white = LrColor(0.94, 0.94, 0.94),
     }
 
+    -- Build checkbox items into columns (top-to-bottom, then left-to-right)
+    local numColumns = 3
+    local totalItems = #standardFocalLengths
+    local itemsPerColumn = math.ceil(totalItems / numColumns)
+
+    local columns = {}
+    for c = 1, numColumns do
+      columns[c] = {}
+    end
+
     local availableIndex = 0
     for i, fl in ipairs(standardFocalLengths) do
       local isAvailable = fl > originalFL
 
-      -- Calculate crop info and assign color (only for available FLs in full-frame mode)
       local colorName, colorLr
       if isAvailable then
         availableIndex = availableIndex + 1
@@ -377,7 +386,10 @@ LrTasks.startAsyncTask(function()
         colorLr = legendColors[colorName]
       end
 
-      table.insert(currentRow, f:row {
+      local colIndex = math.floor((i - 1) / itemsPerColumn) + 1
+      if colIndex > numColumns then colIndex = numColumns end
+
+      table.insert(columns[colIndex], f:row {
         f:checkbox {
           value = LrView.bind("show_" .. fl),
           title = string.format("%dmm", fl),
@@ -391,20 +403,18 @@ LrTasks.startAsyncTask(function()
           width = 12,
           visible = isAvailable and LrView.bind("show_" .. fl) or false,
         },
-        f:static_text {
-          title = "",
-          width = 45,
-          font = "<system/small>",
-          text_color = LrColor(0.5, 0.5, 0.5),
-        },
       })
+    end
 
-      -- Start new row after 4 items
-      if #currentRow >= 4 or i == #standardFocalLengths then
-        table.insert(checkboxRows, f:row(currentRow))
-        currentRow = {}
+    -- Wrap each column's items in f:column, then lay them out in a row
+    local columnViews = {}
+    for c = 1, numColumns do
+      table.insert(columnViews, f:column(columns[c]))
+      if c < numColumns then
+        table.insert(columnViews, f:spacer { width = 20 })
       end
     end
+    local checkboxRows = { f:row(columnViews) }
 
     -- Build image view: unified renderer (macOS JXA / Windows PowerShell, with legacy fallback)
     local imageView = FOVRenderer.createUnifiedImageView(
