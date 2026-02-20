@@ -116,34 +116,63 @@ LrTasks.startAsyncTask(function()
     local isCropped = (cropLeft > 0.001 or cropTop > 0.001 or cropRight < 0.999 or cropBottom < 0.999)
 
     -- Crop rect for the renderer, nil if not cropped
-    -- When CropAngle != 0, compute the 4 rotated corner points in normalized coords
+    -- Per John R. Ellis: (CropLeft,CropTop) and (CropRight,CropBottom) are two opposite
+    -- corners of the already-rotated rectangle. Un-rotate to find axis-aligned corners,
+    -- derive the other two, then re-rotate all four.
     local cropAngle = devSettings.CropAngle or 0
     local cropRect = nil
     if isCropped then
-      local rad = math.rad(-cropAngle)
-      local cosA = math.cos(rad)
-      local sinA = math.sin(rad)
-      local cx, cy = 0.5, 0.5
+      -- Rotation center is the crop rectangle center (not image center)
+      local cx = (cropLeft + cropRight) / 2
+      local cy = (cropTop + cropBottom) / 2
 
-      -- Crop rectangle corners in LR's rotated coordinate space
-      local rawCorners = {
-        { cropLeft, cropTop },
-        { cropRight, cropTop },
-        { cropRight, cropBottom },
-        { cropLeft, cropBottom },
-      }
+      if math.abs(cropAngle) < 0.01 then
+        -- No rotation: simple axis-aligned rectangle
+        cropRect = {
+          corners = {
+            { cropLeft, cropTop },
+            { cropRight, cropTop },
+            { cropRight, cropBottom },
+            { cropLeft, cropBottom },
+          },
+        }
+      else
+        -- CropAngle is positive clockwise in LR; use negative for counterclockwise math
+        local a = math.rad(-cropAngle)
+        local cosA = math.cos(a)
+        local sinA = math.sin(a)
 
-      -- Rotate each corner back to the original image space
-      local corners = {}
-      for _, c in ipairs(rawCorners) do
-        local x = cosA * (c[1] - cx) - sinA * (c[2] - cy) + cx
-        local y = sinA * (c[1] - cx) + cosA * (c[2] - cy) + cy
-        table.insert(corners, { x, y })
+        -- Helper: rotate point around crop center
+        local function rotPt(px, py, angle_cos, angle_sin)
+          return angle_cos * (px - cx) - angle_sin * (py - cy) + cx,
+                 angle_sin * (px - cx) + angle_cos * (py - cy) + cy
+        end
+
+        -- Step 1: Un-rotate the two stored corners by -a to get axis-aligned positions
+        local neg_cosA = math.cos(-a)
+        local neg_sinA = math.sin(-a)
+        local uulx, uuly = rotPt(cropLeft, cropTop, neg_cosA, neg_sinA)
+        local ulrx, ulry = rotPt(cropRight, cropBottom, neg_cosA, neg_sinA)
+
+        -- Step 2: Derive the other two axis-aligned corners
+        local ullx, ully = uulx, ulry   -- lower-left (unrotated)
+        local uurx, uury = ulrx, uuly   -- upper-right (unrotated)
+
+        -- Step 3: Re-rotate all four corners back by +a
+        local c1x, c1y = rotPt(uulx, uuly, cosA, sinA)  -- upper-left
+        local c2x, c2y = rotPt(uurx, uury, cosA, sinA)  -- upper-right
+        local c3x, c3y = rotPt(ulrx, ulry, cosA, sinA)  -- lower-right
+        local c4x, c4y = rotPt(ullx, ully, cosA, sinA)  -- lower-left
+
+        cropRect = {
+          corners = {
+            { c1x, c1y },
+            { c2x, c2y },
+            { c3x, c3y },
+            { c4x, c4y },
+          },
+        }
       end
-
-      cropRect = {
-        corners = corners,  -- 4 points in normalized 0-1 coords, rotated to original image space
-      }
     end
 
     -- Compute cropped dimensions and effective FL for cropped view mode
