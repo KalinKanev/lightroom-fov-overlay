@@ -466,16 +466,32 @@ function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, d
         i, rgb[1] / 255, rgb[2] / 255, rgb[3] / 255))
       table.insert(lines, string.format("color%d.set", i))
 
-      table.insert(lines, string.format("var left%d = Math.floor(%d * scaleX)", i, rect.left))
-      table.insert(lines, string.format("var top%d = Math.floor(%d * scaleY)", i, rect.top))
-      table.insert(lines, string.format("var rw%d = Math.floor(%d * scaleX)", i, rect.width))
-      table.insert(lines, string.format("var rh%d = Math.floor(%d * scaleY)", i, rect.height))
-      -- Flip Y: NSImage origin is bottom-left
-      table.insert(lines, string.format("var ny%d = imgH - top%d - rh%d", i, i, i))
+      if rect.rotatedCorners then
+        -- Draw as rotated polygon (tilted to match crop angle)
+        local rc = rect.rotatedCorners
+        for j = 1, 4 do
+          table.insert(lines, string.format("var rx%d_%d = Math.floor(%s * imgW)", i, j, rc[j][1]))
+          table.insert(lines, string.format("var ry%d_%d = imgH - Math.floor(%s * imgH)", i, j, rc[j][2]))
+        end
+        table.insert(lines, string.format("var path%d = $.NSBezierPath.bezierPath", i))
+        table.insert(lines, string.format("path%d.moveToPoint($.NSMakePoint(rx%d_1, ry%d_1))", i, i, i))
+        table.insert(lines, string.format("path%d.lineToPoint($.NSMakePoint(rx%d_2, ry%d_2))", i, i, i))
+        table.insert(lines, string.format("path%d.lineToPoint($.NSMakePoint(rx%d_3, ry%d_3))", i, i, i))
+        table.insert(lines, string.format("path%d.lineToPoint($.NSMakePoint(rx%d_4, ry%d_4))", i, i, i))
+        table.insert(lines, string.format("path%d.closePath", i))
+      else
+        -- Draw as axis-aligned rectangle
+        table.insert(lines, string.format("var left%d = Math.floor(%d * scaleX)", i, rect.left))
+        table.insert(lines, string.format("var top%d = Math.floor(%d * scaleY)", i, rect.top))
+        table.insert(lines, string.format("var rw%d = Math.floor(%d * scaleX)", i, rect.width))
+        table.insert(lines, string.format("var rh%d = Math.floor(%d * scaleY)", i, rect.height))
+        -- Flip Y: NSImage origin is bottom-left
+        table.insert(lines, string.format("var ny%d = imgH - top%d - rh%d", i, i, i))
+        table.insert(lines, string.format(
+          "var path%d = $.NSBezierPath.bezierPathWithRect($.NSMakeRect(left%d, ny%d, rw%d, rh%d))",
+          i, i, i, i, i))
+      end
 
-      table.insert(lines, string.format(
-        "var path%d = $.NSBezierPath.bezierPathWithRect($.NSMakeRect(left%d, ny%d, rw%d, rh%d))",
-        i, i, i, i, i))
       table.insert(lines, string.format("path%d.setLineWidth(pw)", i))
       table.insert(lines, string.format("path%d.stroke", i))
     end
@@ -632,13 +648,26 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
         '$p = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(128, %d, %d, %d), $pw)',
         rgb[1], rgb[2], rgb[3]))
 
-      table.insert(lines, string.format('$left = [math]::Floor(%d * $scaleX)', rect.left))
-      table.insert(lines, string.format('$top = [math]::Floor(%d * $scaleY)', rect.top))
-      table.insert(lines, string.format('$right = [math]::Floor(%d * $scaleX)', rect.left + rect.width))
-      table.insert(lines, string.format('$bottom = [math]::Floor(%d * $scaleY)', rect.top + rect.height))
-
-      -- Full rectangle outline
-      table.insert(lines, '$g.DrawRectangle($p, $left, $top, ($right - $left), ($bottom - $top))')
+      if rect.rotatedCorners then
+        -- Draw as rotated polygon (tilted to match crop angle)
+        local rc = rect.rotatedCorners
+        table.insert(lines, string.format('$fovPts = @('))
+        for j = 1, 4 do
+          local comma = (j < 4) and "," or ""
+          table.insert(lines, string.format(
+            '  (New-Object System.Drawing.PointF([math]::Floor(%s * $img.Width), [math]::Floor(%s * $img.Height)))%s',
+            rc[j][1], rc[j][2], comma))
+        end
+        table.insert(lines, ')')
+        table.insert(lines, '$g.DrawPolygon($p, $fovPts)')
+      else
+        table.insert(lines, string.format('$left = [math]::Floor(%d * $scaleX)', rect.left))
+        table.insert(lines, string.format('$top = [math]::Floor(%d * $scaleY)', rect.top))
+        table.insert(lines, string.format('$right = [math]::Floor(%d * $scaleX)', rect.left + rect.width))
+        table.insert(lines, string.format('$bottom = [math]::Floor(%d * $scaleY)', rect.top + rect.height))
+        -- Full rectangle outline
+        table.insert(lines, '$g.DrawRectangle($p, $left, $top, ($right - $left), ($bottom - $top))')
+      end
       table.insert(lines, '$p.Dispose()')
     end
   end

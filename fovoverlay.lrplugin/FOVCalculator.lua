@@ -47,7 +47,7 @@ end
     megapixels: Remaining megapixels after crop
     percentage: Percentage of original dimensions
 --]]
-function FOVCalculator.calculateCropRect(originalFL, targetFL, imageWidth, imageHeight)
+function FOVCalculator.calculateCropRect(originalFL, targetFL, imageWidth, imageHeight, centerX, centerY)
   if targetFL <= originalFL then
     return nil -- Can only simulate longer focal lengths
   end
@@ -55,10 +55,19 @@ function FOVCalculator.calculateCropRect(originalFL, targetFL, imageWidth, image
   local cropRatio = targetFL / originalFL
   local cropWidth = imageWidth / cropRatio
   local cropHeight = imageHeight / cropRatio
-  local offsetX = (imageWidth - cropWidth) / 2
-  local offsetY = (imageHeight - cropHeight) / 2
 
-  local originalMP = (imageWidth * imageHeight) / 1000000
+  -- Center on the given point (defaults to image center)
+  local cx = centerX or (imageWidth / 2)
+  local cy = centerY or (imageHeight / 2)
+  local offsetX = cx - cropWidth / 2
+  local offsetY = cy - cropHeight / 2
+
+  -- Clamp to image bounds
+  if offsetX < 0 then offsetX = 0 end
+  if offsetY < 0 then offsetY = 0 end
+  if offsetX + cropWidth > imageWidth then offsetX = imageWidth - cropWidth end
+  if offsetY + cropHeight > imageHeight then offsetY = imageHeight - cropHeight end
+
   local croppedMP = (cropWidth * cropHeight) / 1000000
   local percentage = (1 / cropRatio) * 100
 
@@ -87,11 +96,11 @@ end
 
   Returns array of crop rectangle tables
 --]]
-function FOVCalculator.calculateAllCropRects(originalFL, targetFLs, imageWidth, imageHeight)
+function FOVCalculator.calculateAllCropRects(originalFL, targetFLs, imageWidth, imageHeight, centerX, centerY)
   local results = {}
 
   for _, targetFL in ipairs(targetFLs) do
-    local rect = FOVCalculator.calculateCropRect(originalFL, targetFL, imageWidth, imageHeight)
+    local rect = FOVCalculator.calculateCropRect(originalFL, targetFL, imageWidth, imageHeight, centerX, centerY)
     if rect then
       table.insert(results, rect)
     end
