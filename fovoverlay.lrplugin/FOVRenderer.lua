@@ -8,6 +8,7 @@
 --]]
 
 local LrView = import 'LrView'
+local LrColor = import 'LrColor'
 local LrPathUtils = import 'LrPathUtils'
 local LrFileUtils = import 'LrFileUtils'
 local LrTasks = import 'LrTasks'
@@ -744,7 +745,7 @@ end
 function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRects, props,
     displayWidth, displayHeight, imageWidth, imageHeight,
     croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
-    focalLengths, cropRect)
+    focalLengths, cropRect, subjectDistance)
   local f = LrView.osFactory()
 
   -- Export both base images upfront
@@ -862,11 +863,37 @@ function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRect
     scheduleRender()
   end)
 
-  return f:picture {
+  local pictureView = f:picture {
     value = LrView.bind("overlayImagePath"),
     width = displayWidth,
     height = displayHeight,
   }
+
+  if subjectDistance then
+    local distOverlay = f:view {
+      bind_to_object = props,
+      visible = LrView.bind("showDistance"),
+      margin_left = 10,
+      margin_top = 10,
+      f:view {
+        background_color = LrColor(0.08, 0.08, 0.08),
+        margin_horizontal = 7,
+        margin_vertical = 4,
+        f:static_text {
+          title = "\226\166\191 " .. subjectDistance,
+          text_color = LrColor(0.95, 0.95, 0.95),
+          font = "<system/bold>",
+        },
+      },
+    }
+    return f:view {
+      pictureView,
+      distOverlay,
+      place = 'overlapping',
+    }
+  end
+
+  return pictureView
 end
 
 return FOVRenderer

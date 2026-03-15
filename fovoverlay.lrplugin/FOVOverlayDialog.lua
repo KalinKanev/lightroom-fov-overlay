@@ -25,6 +25,75 @@ local standardFocalLengths = {
   24, 28, 35, 50, 70, 85, 100, 135, 200, 300, 400, 420, 450, 500, 560, 600, 800, 840, 1000, 1200
 }
 
+--[[
+  Query ExifTool for subject distance using brand-specific tags,
+  mirroring the approach of the Focus Points plugin.
+  Returns a formatted distance string, or nil if unavailable.
+--]]
+local function getSubjectDistance(photo, exiftoolPath)
+  local make = (photo:getFormattedMetadata("cameraMake") or ""):lower()
+  local originalPath = photo:getRawMetadata("path")
+  local singleQuoteWrap = '\'"\'"\''
+
+  local isCanon   = make:find("canon")   ~= nil
+  local isNikon   = make:find("nikon")   ~= nil
+  local isSony    = make:find("sony")    ~= nil
+  local isOlympus = make:find("olympus") ~= nil or make:find("om digital") ~= nil
+
+  local tagArgs
+  if     isCanon   then tagArgs = "-FocusDistanceUpper -FocusDistanceLower"
+  elseif isNikon   then tagArgs = "-FocusDistance"
+  elseif isSony    then tagArgs = "-FocusDistance2"
+  elseif isOlympus then tagArgs = "-FocusDistance"
+  else                  tagArgs = "-SubjectDistance"
+  end
+
+  -- Use -s format (TagName: Value) so parsing is unambiguous regardless of tag order
+  local results = {}
+  if WIN_ENV then
+    local tempPath    = LrPathUtils.getStandardFilePath("temp")
+    local batPath     = LrPathUtils.child(tempPath, "fov_dist.bat")
+    local distOutPath = LrPathUtils.child(tempPath, "fov_dist_out.txt")
+    local batFile = io.open(batPath, "w+b")
+    batFile:write(string.format('@"%s" -s %s "%s" > "%s"',
+      exiftoolPath, tagArgs, originalPath, distOutPath))
+    batFile:close()
+    LrTasks.execute('"' .. batPath .. '"')
+    local f_in = io.open(distOutPath, "r")
+    if f_in then
+      for line in f_in:lines() do
+        local key, val = line:match("^(%S+)%s*:%s*(.+)$")
+        if key and val then results[key] = val:match("^%s*(.-)%s*$") end
+      end
+      f_in:close()
+    end
+  else
+    local et  = exiftoolPath:gsub("'", singleQuoteWrap)
+    local op  = originalPath:gsub("'", singleQuoteWrap)
+    local pipe = io.popen(string.format("'%s' -s %s '%s' 2>/dev/null", et, tagArgs, op))
+    if pipe then
+      for line in pipe:lines() do
+        local key, val = line:match("^(%S+)%s*:%s*(.+)$")
+        if key and val then results[key] = val:match("^%s*(.-)%s*$") end
+      end
+      pipe:close()
+    end
+  end
+
+  local function valid(v) return v and v ~= "" and v ~= "-" and v ~= "0" and v ~= "0.00 m" end
+
+  if isCanon then
+    local upper, lower = results["FocusDistanceUpper"], results["FocusDistanceLower"]
+    if valid(upper) and valid(lower) then
+      return upper == lower and upper or (lower .. " \226\128\147 " .. upper)
+    end
+    return valid(upper) and upper or (valid(lower) and lower or nil)
+  elseif isSony    then return valid(results["FocusDistance2"]) and results["FocusDistance2"] or nil
+  elseif isNikon or isOlympus then return valid(results["FocusDistance"])  and results["FocusDistance"]  or nil
+  else                             return valid(results["SubjectDistance"]) and results["SubjectDistance"] or nil
+  end
+end
+
 -- Main function called from menu
 LrTasks.startAsyncTask(function()
   LrFunctionContext.callWithContext("FOVOverlay", function(context)
@@ -197,8 +266,18 @@ LrTasks.startAsyncTask(function()
       effectiveFL = originalFL
     end
 
+    -- Extract focus distance using brand-specific ExifTool tags
+    local subjectDistance = nil
+    local exiftoolPath = FOVRenderer.findExifTool()
+    if exiftoolPath then
+      subjectDistance = getSubjectDistance(photo, exiftoolPath)
+    end
+
     -- Create observable properties
     local props = LrBinding.makePropertyTable(context)
+
+    -- Whether to show distance in header and image overlay
+    props.showDistance = (subjectDistance ~= nil)
 
     -- View mode: "full" (uncropped) or "cropped"
     props.viewMode = "full"
@@ -206,32 +285,40 @@ LrTasks.startAsyncTask(function()
       and { { title = "Full Frame", value = "full" }, { title = "Cropped", value = "cropped" } }
       or  { { title = "Full Frame", value = "full" } }
 
-    -- Header text (reactive to viewMode)
+    -- Append distance to a header string when the toggle is on
+    local function withDist(s)
+      if subjectDistance and props.showDistance then
+        return s .. "  |  \226\166\191 " .. subjectDistance
+      end
+      return s
+    end
+
+    -- Header text (reactive to viewMode and showDistance)
     local function buildFullFrameHeader()
       local flLabel
       if isCropSensor then
-        flLabel = string.format("Lens: %dmm (≈%dmm FF)", lensFL, originalFL)
+        flLabel = string.format("Lens: %dmm (\226\137\136%dmm FF)", lensFL, originalFL)
       else
         flLabel = string.format("Original: %dmm", originalFL)
       end
       if isCropped then
-        return string.format("%s  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-          flLabel, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+        return withDist(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
+          flLabel, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000))
       else
-        return string.format("%s  |  %d × %d  |  %.1f MP",
-          flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)
+        return withDist(string.format("%s  |  %d \195\151 %d  |  %.1f MP",
+          flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000))
       end
     end
 
     local function buildCroppedHeader()
       local flLabel
       if isCropSensor then
-        flLabel = string.format("Lens: %dmm (≈%dmm FF)", lensFL, originalFL)
+        flLabel = string.format("Lens: %dmm (\226\137\136%dmm FF)", lensFL, originalFL)
       else
         flLabel = string.format("Shot at %dmm", originalFL)
       end
-      return string.format("%s  |  Cropped to %dmm equiv  |  %d × %d  |  %.1f MP",
-        flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)
+      return withDist(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
+        flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000))
     end
 
     props.headerText = buildFullFrameHeader()
@@ -333,6 +420,15 @@ LrTasks.startAsyncTask(function()
     -- Observe view mode changes
     props:addObserver("viewMode", function()
       onViewModeChanged()
+    end)
+
+    -- Observe distance toggle: rebuild header only (overlay visibility is a direct binding)
+    props:addObserver("showDistance", function()
+      if props.viewMode == "cropped" then
+        props.headerText = buildCroppedHeader()
+      else
+        props.headerText = buildFullFrameHeader()
+      end
     end)
 
     -- Build initial dropdown items
@@ -499,7 +595,7 @@ LrTasks.startAsyncTask(function()
       photo, allCropRects, croppedCropRects, props,
       displayWidth, displayHeight, imageWidth, imageHeight,
       croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
-      standardFocalLengths, cropRect
+      standardFocalLengths, cropRect, subjectDistance
     )
 
     local contents = f:column {
@@ -547,6 +643,12 @@ LrTasks.startAsyncTask(function()
           items = LrView.bind("highlightFLItems"),
           width = 120,
         },
+        f:spacer { width = 15 },
+        f:checkbox {
+          title = "Show distance",
+          value = LrView.bind("showDistance"),
+          visible = subjectDistance ~= nil,
+        },
         f:static_text {
           title = LrView.bind("renderWarning"),
           text_color = LrColor(0.8, 0.5, 0),
@@ -576,6 +678,7 @@ LrTasks.startAsyncTask(function()
       contents = contents,
       actionVerb = "Close",
       cancelVerb = "< exclude >",
+      resizable = true,
     }
 
   end)
