@@ -22,5 +22,5 @@ return {
   LrPluginInfoProvider = 'FOVInfoProvider.lua',
   LrInitPlugin = 'FOVInitPlugin.lua',
 
-  VERSION = { major=1, minor=3, revision=0, build=1 },
+  VERSION = { major=1, minor=5, revision=0, build=1 },
 }

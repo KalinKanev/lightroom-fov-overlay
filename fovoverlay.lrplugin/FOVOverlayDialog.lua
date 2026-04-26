@@ -303,7 +303,7 @@ LrTasks.startAsyncTask(function()
       end
       if isCropped then
         return withDist(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
-          flLabel, effectiveFL, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000))
+          flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000))
       else
         return withDist(string.format("%s  |  %d \195\151 %d  |  %.1f MP",
           flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000))
