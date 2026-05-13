@@ -639,12 +639,16 @@ LrTasks.startAsyncTask(function()
     end
     local checkboxRows = { f:row(columnViews) }
 
+    -- Read EXIF orientation and compute rotation needed to make image upright
+    local orientationStr = photo:getRawMetadata("orientation")
+    local rotationDeg = FOVCalculator.orientationToDegrees(orientationStr)
+
     -- Build image view: unified renderer (macOS JXA / Windows PowerShell, with legacy fallback)
     local imageView = FOVRenderer.createUnifiedImageView(
       photo, allCropRects, croppedCropRects, props,
       displayWidth, displayHeight, imageWidth, imageHeight,
       croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
-      standardFocalLengths, cropRect, subjectDistance
+      standardFocalLengths, cropRect, subjectDistance, rotationDeg
     )
 
     local columnChildren = {
