@@ -202,16 +202,18 @@ end
 --]]
 function FOVRenderer.rotateJpeg(path, degrees)
   if not degrees or degrees == 0 then return end
+  if degrees ~= 90 and degrees ~= 180 and degrees ~= 270 then return end
 
   if WIN_ENV then
     local tempPath   = LrPathUtils.getStandardFilePath("temp")
     local scriptPath = LrPathUtils.child(tempPath, "fov_rotate.ps1")
     local flipType   = "Rotate" .. degrees .. "FlipNone"
+    local psPath = path:gsub('"', '`"')
     local script = table.concat({
       'Add-Type -AssemblyName System.Drawing',
-      '$img = [System.Drawing.Bitmap]::new("' .. path .. '")',
+      '$img = [System.Drawing.Bitmap]::new("' .. psPath .. '")',
       '$img.RotateFlip([System.Drawing.RotateFlipType]::' .. flipType .. ')',
-      '$img.Save("' .. path .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)',
+      '$img.Save("' .. psPath .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)',
       '$img.Dispose()',
     }, "\r\n")
     local sf = io.open(scriptPath, "w+b")
