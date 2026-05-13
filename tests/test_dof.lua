@@ -58,6 +58,8 @@ check("nil fl",    FOVCalculator.calculateDoF(nil, 5.6, 4, 1.0), nil)
 check("zero fl",   FOVCalculator.calculateDoF(0, 5.6, 4, 1.0), nil)
 check("nil N",     FOVCalculator.calculateDoF(300, nil, 4, 1.0), nil)
 check("nil dist",  FOVCalculator.calculateDoF(300, 5.6, nil, 1.0), nil)
+check("nil crop",  FOVCalculator.calculateDoF(300, 5.6, 4, nil), nil)
+check("zero crop", FOVCalculator.calculateDoF(300, 5.6, 4, 0),   nil)
 
 print(string.format("\n%d passed, %d failed", pass, fail))
 if fail > 0 then os.exit(1) end
