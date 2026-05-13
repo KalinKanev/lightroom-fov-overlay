@@ -197,6 +197,41 @@ function FOVRenderer.findExifTool()
 end
 
 --[[
+  Rotate the JPEG at `path` in-place by `degrees` clockwise.
+  No-op when degrees is 0. macOS uses sips; Windows uses PowerShell System.Drawing.
+--]]
+function FOVRenderer.rotateJpeg(path, degrees)
+  if not degrees or degrees == 0 then return end
+
+  if WIN_ENV then
+    local tempPath   = LrPathUtils.getStandardFilePath("temp")
+    local scriptPath = LrPathUtils.child(tempPath, "fov_rotate.ps1")
+    local flipType   = "Rotate" .. degrees .. "FlipNone"
+    local script = table.concat({
+      'Add-Type -AssemblyName System.Drawing',
+      '$img = [System.Drawing.Bitmap]::new("' .. path .. '")',
+      '$img.RotateFlip([System.Drawing.RotateFlipType]::' .. flipType .. ')',
+      '$img.Save("' .. path .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)',
+      '$img.Dispose()',
+    }, "\r\n")
+    local sf = io.open(scriptPath, "w+b")
+    if sf then
+      sf:write(script)
+      sf:close()
+    end
+    local cmdline = 'powershell -ExecutionPolicy Bypass -File "' .. scriptPath .. '"'
+    LrTasks.execute('"' .. cmdline .. '"')
+    LrTasks.sleep(0.05)
+    LrTasks.yield()
+  else
+    local singleQuoteWrap = '\'"\'"\''
+    local p = path:gsub("'", singleQuoteWrap)
+    LrTasks.execute(string.format(
+      "sips -r %d '%s' --out '%s' 2>/dev/null", degrees, p, p))
+  end
+end
+
+--[[
   Extract the embedded JPEG preview from a RAW file using ExifTool.
   Tries JpgFromRaw first, then PreviewImage as fallback.
   Returns the path to the extracted JPEG, or nil on failure.
