@@ -213,8 +213,10 @@ function FOVRenderer.rotateJpeg(path, degrees)
       'Add-Type -AssemblyName System.Drawing',
       '$img = [System.Drawing.Bitmap]::new("' .. psPath .. '")',
       '$img.RotateFlip([System.Drawing.RotateFlipType]::' .. flipType .. ')',
-      '$img.Save("' .. psPath .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)',
+      '$tmp = "' .. psPath .. '.rot.tmp"',
+      '$img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Jpeg)',
       '$img.Dispose()',
+      'Move-Item -Force $tmp "' .. psPath .. '"',
     }, "\r\n")
     local sf = io.open(scriptPath, "w+b")
     if sf then
