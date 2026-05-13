@@ -64,6 +64,18 @@ DoF: 3.8 m – ∞  |  Hyperfocal: 312 m
 | `FOVCalculator.lua` | Add `calculateDoF(focalLengthMM, fNumber, distanceM, cropFactor)` |
 | `FOVOverlayDialog.lua` | Parse aperture from EXIF; extend `getSubjectDistance` to return `{display, meters}`; add DoF computed property; add DoF UI row below subject distance row |
 
+## Brand Coverage
+
+| Brand | ExifTool tag | Format | DoF math input |
+|---|---|---|---|
+| Canon | `FocusDistanceUpper` + `FocusDistanceLower` | Single value or range "3.8 m – 4.7 m" | Midpoint of upper/lower |
+| Nikon | `FocusDistance` | Single value | Direct |
+| Sony | `FocusDistance2` | Single value | Direct |
+| Olympus / OM Digital | `FocusDistance` | Single value | Direct |
+| All others (Fujifilm, Panasonic, Pentax, Leica, …) | `SubjectDistance` | Single value | Direct |
+
+Parsing: strip the " m" unit suffix from ExifTool output and convert to float. All tags return meters.
+
 ## Edge Cases
 
 | Case | Behavior |
@@ -72,3 +84,4 @@ DoF: 3.8 m – ∞  |  Hyperfocal: 312 m
 | Distance unavailable | Hide DoF row (same as existing distance toggle) |
 | Distance ≥ hyperfocal | Far = ∞, show "∞" |
 | Canon range distance | Use midpoint of upper/lower bounds for math |
+| Encoded infinity (e.g. 65535 m, 999.9 m) | Treat as ∞ — show Hyperfocal only, omit Near/Far/Span |
