@@ -212,4 +212,16 @@ function FOVCalculator.calculateDoF(focalLengthMM, fNumber, distanceM, cropFacto
   return { near = near, far = far, span = span, hyperfocal = hyperfocal, isInfinity = false }
 end
 
+--[[
+  Map a Lightroom orientation string to the degrees of clockwise rotation
+  needed to make the image upright.
+  Returns 0, 90, 180, or 270.
+--]]
+function FOVCalculator.orientationToDegrees(orientationStr)
+  if orientationStr == "BC" then return 90
+  elseif orientationStr == "CD" then return 180
+  elseif orientationStr == "DA" then return 270
+  else return 0 end
+end
+
 return FOVCalculator
