@@ -366,13 +366,28 @@ end
   Returns table:
     { path = <string>, isUncropped = <boolean> }
 --]]
-function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
+function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotationDeg)
+  rotationDeg = rotationDeg or 0
   local originalPath = photo:getRawMetadata("path")
   local ext = LrPathUtils.extension(originalPath)
   ext = ext and ext:lower() or ""
 
-  -- JPEG files: use the original directly
+  -- JPEG files: use the original directly, or a rotated temp copy when needed
   if ext == "jpg" or ext == "jpeg" then
+    if rotationDeg ~= 0 then
+      local tempPath = LrPathUtils.getStandardFilePath("temp")
+      local tempJpeg = LrPathUtils.child(tempPath, "fov_uncropped.jpg")
+      if LrFileUtils.exists(tempJpeg) then LrFileUtils.delete(tempJpeg) end
+      local inf  = io.open(originalPath, "rb")
+      local outf = io.open(tempJpeg, "w+b")
+      if inf and outf then
+        outf:write(inf:read("*a"))
+        inf:close()
+        outf:close()
+      end
+      FOVRenderer.rotateJpeg(tempJpeg, rotationDeg)
+      return { path = tempJpeg, isUncropped = true }
+    end
     return { path = originalPath, isUncropped = true }
   end
 
@@ -387,6 +402,7 @@ function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
     if exiftoolPath then
       local previewPath = FOVRenderer.extractRawPreview(exiftoolPath, originalPath)
       if previewPath then
+        FOVRenderer.rotateJpeg(previewPath, rotationDeg)
         return { path = previewPath, isUncropped = true }
       end
     end
@@ -782,11 +798,11 @@ end
 function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRects, props,
     displayWidth, displayHeight, imageWidth, imageHeight,
     croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
-    focalLengths, cropRect, subjectDistance)
+    focalLengths, cropRect, subjectDistance, rotationDeg)
   local f = LrView.osFactory()
 
   -- Export both base images upfront
-  local uncroppedResult = FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
+  local uncroppedResult = FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotationDeg or 0)
   local croppedBasePath = FOVRenderer.exportBaseImage(photo, croppedDisplayWidth, croppedDisplayHeight)
   local hasUncropped = uncroppedResult.isUncropped
 
