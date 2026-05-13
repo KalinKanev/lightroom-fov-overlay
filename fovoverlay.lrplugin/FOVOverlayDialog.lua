@@ -28,7 +28,7 @@ local standardFocalLengths = {
 --[[
   Query ExifTool for subject distance using brand-specific tags,
   mirroring the approach of the Focus Points plugin.
-  Returns a formatted distance string, or nil if unavailable.
+  Returns {display=string, meters=number} or nil if unavailable.
 --]]
 local function getSubjectDistance(photo, exiftoolPath)
   local make = (photo:getFormattedMetadata("cameraMake") or ""):lower()
@@ -81,16 +81,30 @@ local function getSubjectDistance(photo, exiftoolPath)
   end
 
   local function valid(v) return v and v ~= "" and v ~= "-" and v ~= "0" and v ~= "0.00 m" end
+  local function parseMeters(v)
+    return v and tonumber(v:match("(%d+%.?%d*)")) or nil
+  end
 
   if isCanon then
     local upper, lower = results["FocusDistanceUpper"], results["FocusDistanceLower"]
     if valid(upper) and valid(lower) then
-      return upper == lower and upper or (lower .. " \226\128\147 " .. upper)
+      local display = upper == lower and upper or (lower .. " \226\128\147 " .. upper)
+      local uM, lM = parseMeters(upper), parseMeters(lower)
+      local meters = (uM and lM) and ((uM + lM) / 2) or (uM or lM)
+      return { display = display, meters = meters }
     end
-    return valid(upper) and upper or (valid(lower) and lower or nil)
-  elseif isSony    then return valid(results["FocusDistance2"]) and results["FocusDistance2"] or nil
-  elseif isNikon or isOlympus then return valid(results["FocusDistance"])  and results["FocusDistance"]  or nil
-  else                             return valid(results["SubjectDistance"]) and results["SubjectDistance"] or nil
+    if valid(upper) then return { display = upper, meters = parseMeters(upper) } end
+    if valid(lower) then return { display = lower, meters = parseMeters(lower) } end
+    return nil
+  elseif isSony then
+    local v = results["FocusDistance2"]
+    return valid(v) and { display = v, meters = parseMeters(v) } or nil
+  elseif isNikon or isOlympus then
+    local v = results["FocusDistance"]
+    return valid(v) and { display = v, meters = parseMeters(v) } or nil
+  else
+    local v = results["SubjectDistance"]
+    return valid(v) and { display = v, meters = parseMeters(v) } or nil
   end
 end
 
@@ -267,10 +281,15 @@ LrTasks.startAsyncTask(function()
     end
 
     -- Extract focus distance using brand-specific ExifTool tags
-    local subjectDistance = nil
+    local subjectDistance = nil    -- display string used in header and overlay
+    local subjectDistanceM = nil   -- numeric meters used for DoF calculation
     local exiftoolPath = FOVRenderer.findExifTool()
     if exiftoolPath then
-      subjectDistance = getSubjectDistance(photo, exiftoolPath)
+      local distResult = getSubjectDistance(photo, exiftoolPath)
+      if distResult then
+        subjectDistance = distResult.display
+        subjectDistanceM = distResult.meters
+      end
     end
 
     -- Create observable properties
