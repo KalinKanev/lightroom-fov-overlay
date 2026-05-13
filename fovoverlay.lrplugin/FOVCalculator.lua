@@ -164,4 +164,52 @@ FOVCalculator.sensorSizes = {
   microFourThirds = { width = 17.3, height = 13.0, diagonal = 21.64 },
 }
 
+--[[
+  Calculate depth of field information
+
+  Parameters:
+    focalLengthMM: Focal length in mm
+    fNumber: F-number (aperture)
+    distanceM: Focus distance in meters
+    cropFactor: Crop factor (1.0 for full-frame, 1.5 for APS-C, etc.)
+
+  Returns table with:
+    near: Near DOF distance in meters (nil if at/beyond infinity threshold)
+    far: Far DOF distance in meters (nil if at/beyond infinity threshold or focus distance beyond hyperfocal)
+    span: DOF span (far - near) in meters (nil if at/beyond infinity threshold or focus distance beyond hyperfocal)
+    hyperfocal: Hyperfocal distance in meters
+    isInfinity: Boolean indicating if focus distance is at infinity
+
+  Returns nil if inputs are invalid
+--]]
+local INFINITY_THRESHOLD_M = 500  -- meters; values above this are treated as ∞
+
+function FOVCalculator.calculateDoF(focalLengthMM, fNumber, distanceM, cropFactor)
+  if not focalLengthMM or not fNumber or not distanceM or not cropFactor then return nil end
+  if focalLengthMM <= 0 or fNumber <= 0 or distanceM <= 0 or cropFactor <= 0 then return nil end
+
+  local fl  = focalLengthMM
+  local coc = 0.029 / cropFactor        -- circle of confusion (mm)
+  local H   = (fl * fl) / (fNumber * coc) + fl  -- hyperfocal distance (mm)
+  local hyperfocal = H / 1000           -- meters
+
+  if distanceM >= INFINITY_THRESHOLD_M then
+    return { near = nil, far = nil, span = nil, hyperfocal = hyperfocal, isInfinity = true }
+  end
+
+  local d    = distanceM * 1000         -- convert to mm
+  local near = (H * d) / (H + d) / 1000  -- meters
+
+  local far, span
+  if d >= H then
+    far  = nil
+    span = nil
+  else
+    far  = (H * d) / (H - d) / 1000    -- meters
+    span = far - near
+  end
+
+  return { near = near, far = far, span = span, hyperfocal = hyperfocal, isInfinity = false }
+end
+
 return FOVCalculator
