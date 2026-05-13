@@ -2,3 +2,5 @@
 Thumbs.db
 *.log
 fovoverlay.lrplugin/bin/
+.claude/
+.superpowers/
