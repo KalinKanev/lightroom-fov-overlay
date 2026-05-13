@@ -376,7 +376,7 @@ function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotatio
   if ext == "jpg" or ext == "jpeg" then
     if rotationDeg ~= 0 then
       local tempPath = LrPathUtils.getStandardFilePath("temp")
-      local tempJpeg = LrPathUtils.child(tempPath, "fov_uncropped.jpg")
+      local tempJpeg = LrPathUtils.child(tempPath, "fov_jpeg_rotated.jpg")
       if LrFileUtils.exists(tempJpeg) then LrFileUtils.delete(tempJpeg) end
       local inf  = io.open(originalPath, "rb")
       local outf = io.open(tempJpeg, "w+b")
@@ -384,9 +384,10 @@ function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotatio
         outf:write(inf:read("*a"))
         inf:close()
         outf:close()
+        FOVRenderer.rotateJpeg(tempJpeg, rotationDeg)
+        return { path = tempJpeg, isUncropped = true }
       end
-      FOVRenderer.rotateJpeg(tempJpeg, rotationDeg)
-      return { path = tempJpeg, isUncropped = true }
+      return { path = originalPath, isUncropped = true }
     end
     return { path = originalPath, isUncropped = true }
   end
