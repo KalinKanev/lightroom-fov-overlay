@@ -292,6 +292,15 @@ LrTasks.startAsyncTask(function()
       end
     end
 
+    -- Parse aperture and compute depth of field
+    local apertureStr = photo:getFormattedMetadata("aperture")
+    local fNumber = apertureStr and tonumber(apertureStr:match("(%d+%.?%d*)%s*$")) or nil
+    local cropFactor = (isCropSensor and lensFL > 0) and (originalFL / lensFL) or 1.0
+    local dofResult = nil
+    if fNumber and subjectDistanceM and lensFL then
+      dofResult = FOVCalculator.calculateDoF(lensFL, fNumber, subjectDistanceM, cropFactor)
+    end
+
     -- Create observable properties
     local props = LrBinding.makePropertyTable(context)
 
@@ -310,6 +319,23 @@ LrTasks.startAsyncTask(function()
         return s .. "  |  \226\166\191 " .. subjectDistance
       end
       return s
+    end
+
+    local function buildDofText()
+      if not dofResult then return "" end
+      local function fmt(m)
+        if m >= 100 then return string.format("%.0f m", m)
+        elseif m >= 10 then return string.format("%.1f m", m)
+        else return string.format("%.2f m", m) end
+      end
+      local h = fmt(dofResult.hyperfocal)
+      if dofResult.isInfinity then
+        return "DoF: \226\136\158  |  Hyperfocal: " .. h
+      end
+      local nearStr = fmt(dofResult.near)
+      local farStr  = dofResult.far and fmt(dofResult.far) or "\226\136\158"
+      local spanStr = dofResult.span and (" (span " .. fmt(dofResult.span) .. ")") or ""
+      return "DoF: " .. nearStr .. " \226\128\147 " .. farStr .. spanStr .. "  |  Hyperfocal: " .. h
     end
 
     -- Header text (reactive to viewMode and showDistance)
@@ -617,7 +643,7 @@ LrTasks.startAsyncTask(function()
       standardFocalLengths, cropRect, subjectDistance
     )
 
-    local contents = f:column {
+    local columnChildren = {
       bind_to_object = props,
       spacing = f:control_spacing(),
 
@@ -628,68 +654,67 @@ LrTasks.startAsyncTask(function()
           font = "<system/bold>",
         },
       },
-
-      f:spacer { height = 5 },
-
-      -- Focal length checkboxes
-      f:group_box {
-        title = "Target Focal Lengths (select to show overlay)",
-        fill_horizontal = 1,
-        f:column(checkboxRows),
-      },
-
-      -- Highlight crop and view mode dropdowns
-      f:row {
-        f:static_text {
-          title = "View:",
-          alignment = "right",
-          width = 35,
-        },
-        f:popup_menu {
-          value = LrView.bind("viewMode"),
-          items = LrView.bind("viewModeItems"),
-          width = 110,
-          enabled = isCropped,
-        },
-        f:spacer { width = 15 },
-        f:static_text {
-          title = "Highlight crop:",
-          alignment = "right",
-          width = 90,
-        },
-        f:popup_menu {
-          value = LrView.bind("highlightFL"),
-          items = LrView.bind("highlightFLItems"),
-          width = 120,
-        },
-        f:spacer { width = 15 },
-        f:checkbox {
-          title = "Show distance",
-          value = LrView.bind("showDistance"),
-          visible = subjectDistance ~= nil,
-        },
-        f:static_text {
-          title = LrView.bind("renderWarning"),
-          text_color = LrColor(0.8, 0.5, 0),
-          font = "<system/small>",
-          visible = LrView.bind {
-            key = "renderWarning",
-            transform = function(value) return value ~= nil and value ~= "" end,
-          },
-        },
-      },
-
-      f:spacer { height = 10 },
-
-      -- Image with overlays
-      f:row {
-        f:view {
-          width = displayWidth,
-          height = displayHeight,
-          imageView,
-        },
-      },
     }
+
+    -- DoF row (only inserted when DoF is available)
+    if dofResult then
+      table.insert(columnChildren, f:row {
+        f:static_text {
+          title = buildDofText(),
+          font = "<system/small>",
+          text_color = LrColor(0.65, 0.65, 0.65),
+        },
+      })
+    end
+
+    -- Remaining content items
+    table.insert(columnChildren, f:spacer { height = 5 })
+    table.insert(columnChildren, f:group_box {
+      title = "Target Focal Lengths (select to show overlay)",
+      fill_horizontal = 1,
+      f:column(checkboxRows),
+    })
+    table.insert(columnChildren, f:row {
+      f:static_text { title = "View:", alignment = "right", width = 35 },
+      f:popup_menu {
+        value = LrView.bind("viewMode"),
+        items = LrView.bind("viewModeItems"),
+        width = 110,
+        enabled = isCropped,
+      },
+      f:spacer { width = 15 },
+      f:static_text { title = "Highlight crop:", alignment = "right", width = 90 },
+      f:popup_menu {
+        value = LrView.bind("highlightFL"),
+        items = LrView.bind("highlightFLItems"),
+        width = 120,
+      },
+      f:spacer { width = 15 },
+      f:checkbox {
+        title = "Show distance",
+        value = LrView.bind("showDistance"),
+        visible = subjectDistance ~= nil,
+      },
+      f:static_text {
+        title = LrView.bind("renderWarning"),
+        text_color = LrColor(0.8, 0.5, 0),
+        font = "<system/small>",
+        visible = LrView.bind {
+          key = "renderWarning",
+          transform = function(value) return value ~= nil and value ~= "" end,
+        },
+      },
+    })
+    table.insert(columnChildren, f:spacer { height = 10 })
+    table.insert(columnChildren, f:row {
+      f:view {
+        width = displayWidth,
+        height = displayHeight,
+        imageView,
+      },
+    })
+
+    local contents = f:column(columnChildren)
 
     -- Show the dialog
     LrDialogs.presentModalDialog {
