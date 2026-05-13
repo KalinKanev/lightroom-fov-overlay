@@ -294,10 +294,14 @@ LrTasks.startAsyncTask(function()
 
     -- Parse aperture and compute depth of field
     local apertureStr = photo:getFormattedMetadata("aperture")
-    local fNumber = apertureStr and tonumber(apertureStr:match("(%d+%.?%d*)%s*$")) or nil
+    local fNumber = nil
+    if apertureStr then
+      local normalized = apertureStr:gsub(",", ".")  -- handle European locale (e.g. "f / 4,0")
+      fNumber = tonumber(normalized:match("(%d+%.?%d*)%s*$"))
+    end
     local cropFactor = (isCropSensor and lensFL > 0) and (originalFL / lensFL) or 1.0
     local dofResult = nil
-    if fNumber and subjectDistanceM and lensFL then
+    if fNumber and fNumber > 0 and subjectDistanceM and lensFL then
       dofResult = FOVCalculator.calculateDoF(lensFL, fNumber, subjectDistanceM, cropFactor)
     end
 
