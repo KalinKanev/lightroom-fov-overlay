@@ -197,6 +197,45 @@ function FOVRenderer.findExifTool()
 end
 
 --[[
+  Rotate the JPEG at `path` in-place by `degrees` clockwise.
+  No-op when degrees is 0. macOS uses sips; Windows uses PowerShell System.Drawing.
+--]]
+function FOVRenderer.rotateJpeg(path, degrees)
+  if not degrees or degrees == 0 then return end
+  if degrees ~= 90 and degrees ~= 180 and degrees ~= 270 then return end
+
+  if WIN_ENV then
+    local tempPath   = LrPathUtils.getStandardFilePath("temp")
+    local scriptPath = LrPathUtils.child(tempPath, "fov_rotate.ps1")
+    local flipType   = "Rotate" .. degrees .. "FlipNone"
+    local psPath = path:gsub('"', '`"')
+    local script = table.concat({
+      'Add-Type -AssemblyName System.Drawing',
+      '$img = [System.Drawing.Bitmap]::new("' .. psPath .. '")',
+      '$img.RotateFlip([System.Drawing.RotateFlipType]::' .. flipType .. ')',
+      '$tmp = "' .. psPath .. '.rot.tmp"',
+      '$img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Jpeg)',
+      '$img.Dispose()',
+      'Move-Item -Force $tmp "' .. psPath .. '"',
+    }, "\r\n")
+    local sf = io.open(scriptPath, "w+b")
+    if sf then
+      sf:write(script)
+      sf:close()
+    end
+    local cmdline = 'powershell -ExecutionPolicy Bypass -File "' .. scriptPath .. '"'
+    LrTasks.execute('"' .. cmdline .. '"')
+    LrTasks.sleep(0.05)
+    LrTasks.yield()
+  else
+    local singleQuoteWrap = '\'"\'"\''
+    local p = path:gsub("'", singleQuoteWrap)
+    LrTasks.execute(string.format(
+      "sips -r %d '%s' --out '%s' 2>/dev/null", degrees, p, p))
+  end
+end
+
+--[[
   Extract the embedded JPEG preview from a RAW file using ExifTool.
   Tries JpgFromRaw first, then PreviewImage as fallback.
   Returns the path to the extracted JPEG, or nil on failure.
@@ -329,13 +368,29 @@ end
   Returns table:
     { path = <string>, isUncropped = <boolean> }
 --]]
-function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
+function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotationDeg)
+  rotationDeg = rotationDeg or 0
   local originalPath = photo:getRawMetadata("path")
   local ext = LrPathUtils.extension(originalPath)
   ext = ext and ext:lower() or ""
 
-  -- JPEG files: use the original directly
+  -- JPEG files: use the original directly, or a rotated temp copy when needed
   if ext == "jpg" or ext == "jpeg" then
+    if rotationDeg ~= 0 then
+      local tempPath = LrPathUtils.getStandardFilePath("temp")
+      local tempJpeg = LrPathUtils.child(tempPath, "fov_jpeg_rotated.jpg")
+      if LrFileUtils.exists(tempJpeg) then LrFileUtils.delete(tempJpeg) end
+      local inf  = io.open(originalPath, "rb")
+      local outf = io.open(tempJpeg, "w+b")
+      if inf and outf then
+        outf:write(inf:read("*a"))
+        inf:close()
+        outf:close()
+        FOVRenderer.rotateJpeg(tempJpeg, rotationDeg)
+        return { path = tempJpeg, isUncropped = true }
+      end
+      return { path = originalPath, isUncropped = true }
+    end
     return { path = originalPath, isUncropped = true }
   end
 
@@ -350,6 +405,7 @@ function FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
     if exiftoolPath then
       local previewPath = FOVRenderer.extractRawPreview(exiftoolPath, originalPath)
       if previewPath then
+        FOVRenderer.rotateJpeg(previewPath, rotationDeg)
         return { path = previewPath, isUncropped = true }
       end
     end
@@ -745,11 +801,11 @@ end
 function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRects, props,
     displayWidth, displayHeight, imageWidth, imageHeight,
     croppedDisplayWidth, croppedDisplayHeight, croppedWidth, croppedHeight,
-    focalLengths, cropRect, subjectDistance)
+    focalLengths, cropRect, subjectDistance, rotationDeg)
   local f = LrView.osFactory()
 
   -- Export both base images upfront
-  local uncroppedResult = FOVRenderer.exportUncropped(photo, displayWidth, displayHeight)
+  local uncroppedResult = FOVRenderer.exportUncropped(photo, displayWidth, displayHeight, rotationDeg or 0)
   local croppedBasePath = FOVRenderer.exportBaseImage(photo, croppedDisplayWidth, croppedDisplayHeight)
   local hasUncropped = uncroppedResult.isUncropped
 
