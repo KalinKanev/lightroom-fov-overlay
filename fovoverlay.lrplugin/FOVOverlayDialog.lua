@@ -305,11 +305,31 @@ LrTasks.startAsyncTask(function()
       dofResult = FOVCalculator.calculateDoF(lensFL, fNumber, subjectDistanceM, cropFactor)
     end
 
+    -- Shot ISO, used for crop-equivalent ISO (approximate, see FOVCalculator.equivalentISO)
+    local baseISO = FOVCalculator.parseISO(photo:getRawMetadata("isoSpeedRating"))
+      or FOVCalculator.parseISO(photo:getFormattedMetadata("isoSpeedRating"))
+    local fullArea = imageWidth * imageHeight
+
     -- Create observable properties
     local props = LrBinding.makePropertyTable(context)
 
     -- Whether to show distance in header and image overlay
     props.showDistance = (subjectDistance ~= nil)
+
+    -- Crop-equivalent ISO toggles. isoFullFrame only matters on crop-sensor bodies.
+    props.showISO = true
+    props.isoFullFrame = false
+
+    -- Crop-equivalent ISO for a crop area (sensor pixels), relative to the full sensor,
+    -- or to a full-frame sensor when the full-frame option is on
+    local function isoEq(cropArea)
+      local factor = (props.isoFullFrame and isCropSensor) and cropFactor or nil
+      return FOVCalculator.equivalentISO(baseISO, fullArea, cropArea, factor)
+    end
+
+    local function ffSuffix()
+      return (props.isoFullFrame and isCropSensor) and " FF" or ""
+    end
 
     -- View mode: "full" (uncropped) or "cropped"
     props.viewMode = "full"
@@ -321,6 +341,19 @@ LrTasks.startAsyncTask(function()
     local function withDist(s)
       if subjectDistance and props.showDistance then
         return s .. "  |  \226\166\191 " .. subjectDistance
+      end
+      return s
+    end
+
+    -- Append the crop-equivalent ISO of the current Lightroom crop, or the shot ISO
+    local function withISO(s)
+      if not props.showISO then return s end
+      local ff = ffSuffix()
+      if isCropped or ff ~= "" then
+        local eq = isoEq(croppedWidth * croppedHeight)
+        return s .. "  |  " .. FOVCalculator.formatISOValue(eq, "\226\137\136", true) .. ff .. " equiv"
+      elseif baseISO then
+        return s .. string.format("  |  ISO %d", baseISO)
       end
       return s
     end
@@ -351,11 +384,11 @@ LrTasks.startAsyncTask(function()
         flLabel = string.format("Original: %dmm", originalFL)
       end
       if isCropped then
-        return withDist(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
-          flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000))
+        return withDist(withISO(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
+          flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)))
       else
-        return withDist(string.format("%s  |  %d \195\151 %d  |  %.1f MP",
-          flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000))
+        return withDist(withISO(string.format("%s  |  %d \195\151 %d  |  %.1f MP",
+          flLabel, imageWidth, imageHeight, (imageWidth * imageHeight) / 1000000)))
       end
     end
 
@@ -366,8 +399,8 @@ LrTasks.startAsyncTask(function()
       else
         flLabel = string.format("Shot at %dmm", originalFL)
       end
-      return withDist(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
-        flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000))
+      return withDist(withISO(string.format("%s  |  Cropped to %dmm equiv  |  %d \195\151 %d  |  %.1f MP",
+        flLabel, effectiveFL, croppedWidth, croppedHeight, (croppedWidth * croppedHeight) / 1000000)))
     end
 
     props.headerText = buildFullFrameHeader()
@@ -542,6 +575,55 @@ LrTasks.startAsyncTask(function()
       rect.colorIndex = flToColorIndex[rect.focalLength] or ((1 - 1) % #FOVRenderer.colorNames) + 1
     end
 
+    -- Crop-equivalent ISO per FOV rect, always relative to the full sensor.
+    -- Rect width/height are in sensor pixels in both views, so one formula works.
+    -- "{approx}" is replaced per renderer (UTF-8 can't be written safely into the scripts).
+    local function annotateISO()
+      local lists = { allCropRects }
+      if croppedCropRects ~= allCropRects then table.insert(lists, croppedCropRects) end
+      for _, rects in ipairs(lists) do
+        for _, rect in ipairs(rects) do
+          rect.isoEq = isoEq(rect.width * rect.height)
+          rect.isoLabel = string.format("%dmm  %s%s", rect.focalLength,
+            FOVCalculator.formatISOValue(rect.isoEq, "{approx}", false), ffSuffix())
+        end
+      end
+    end
+
+    -- Legend text per FL for the active view ("" when the FL has no rect in this view)
+    local function updateLegendISO()
+      local rects = (props.viewMode == "cropped") and croppedCropRects or allCropRects
+      local byFL = {}
+      for _, rect in ipairs(rects) do byFL[rect.focalLength] = rect end
+      for _, fl in ipairs(standardFocalLengths) do
+        local rect = byFL[fl]
+        props["iso_" .. fl] = (props.showISO and rect)
+          and FOVCalculator.formatISOValue(rect.isoEq, "\226\137\136", false)
+          or ""
+      end
+    end
+
+    local function refreshHeader()
+      if props.viewMode == "cropped" then
+        props.headerText = buildCroppedHeader()
+      else
+        props.headerText = buildFullFrameHeader()
+      end
+    end
+
+    annotateISO()
+    updateLegendISO()
+    props:addObserver("viewMode", function() updateLegendISO() end)
+    props:addObserver("showISO", function()
+      refreshHeader()
+      updateLegendISO()
+    end)
+    props:addObserver("isoFullFrame", function()
+      annotateISO()
+      refreshHeader()
+      updateLegendISO()
+    end)
+
     -- When crop is tilted, rotate FOV guide rects to match the crop orientation
     if isCropped and math.abs(cropAngle) >= 0.01 and cropCenterX then
       local rad = math.rad(cropAngle)
@@ -626,6 +708,13 @@ LrTasks.startAsyncTask(function()
           width = 12,
           visible = isAvailable and LrView.bind("show_" .. fl) or false,
         },
+        f:static_text {
+          title = LrView.bind("iso_" .. fl),
+          font = "<system/small>",
+          text_color = LrColor(0.65, 0.65, 0.65),
+          width_in_chars = 9,
+          visible = isAvailable and LrView.bind("show_" .. fl) or false,
+        },
       })
     end
 
@@ -702,6 +791,21 @@ LrTasks.startAsyncTask(function()
         title = "Show distance",
         value = LrView.bind("showDistance"),
         visible = subjectDistance ~= nil,
+      },
+      f:checkbox {
+        title = "Show ISO equiv",
+        value = LrView.bind("showISO"),
+        tooltip = "Approximate noise-equivalent ISO at the same output size:\n" ..
+                  "ISO \195\151 (full frame area \195\183 crop area).\n" ..
+                  "Based on Steve Perry's crop-vs-ISO guidance. Ignores read noise and denoise.",
+      },
+      f:checkbox {
+        title = "vs full frame",
+        value = LrView.bind("isoFullFrame"),
+        enabled = LrView.bind("showISO"),
+        visible = isCropSensor,
+        tooltip = "Also convert to full-frame equivalence: multiplies by the sensor crop factor squared\n" ..
+                  "(APS-C 1.5\195\151: ISO 800 \226\137\136 full-frame ISO 1800).",
       },
       f:static_text {
         title = LrView.bind("renderWarning"),

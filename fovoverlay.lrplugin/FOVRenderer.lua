@@ -13,6 +13,7 @@ local LrPathUtils = import 'LrPathUtils'
 local LrFileUtils = import 'LrFileUtils'
 local LrTasks = import 'LrTasks'
 local LrDialogs = import 'LrDialogs'
+local FOVCalculator = require 'FOVCalculator'
 
 local FOVRenderer = {}
 
@@ -440,7 +441,7 @@ end
 
   Returns: Path to the rendered JPEG
 --]]
-function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, displayWidth, displayHeight, workingWidth, workingHeight, renderCount, highlightFL, cropRect)
+function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, displayWidth, displayHeight, workingWidth, workingHeight, renderCount, highlightFL, cropRect, showLabels)
   local tempPath = LrPathUtils.getStandardFilePath("temp")
   local outputPath = LrPathUtils.child(tempPath, "fov_render_" .. renderCount .. ".jpg")
   local scriptPath = LrPathUtils.child(tempPath, "fov_draw.js")
@@ -589,6 +590,48 @@ function FOVRenderer.renderMacOverlay(baseImagePath, allCropRects, enabledFLs, d
     end
   end
 
+  -- Crop-equivalent ISO labels at each rect's top-left corner (drawn last so they sit above dimming)
+  if showLabels then
+    local labelFont = math.max(11, math.floor(displayWidth / 75))
+    local labelHeight = math.floor(labelFont * 1.4) + 4
+    local labeled = FOVCalculator.selectLabeledFLs(
+      allCropRects, enabledFLs, displayHeight / workingHeight, labelHeight)
+
+    table.insert(lines, string.format("var lblFont = $.NSFont.boldSystemFontOfSize(%d)", labelFont))
+    table.insert(lines, "var lblBg = $.NSColor.colorWithCalibratedRedGreenBlueAlpha(0, 0, 0, 0.6)")
+    table.insert(lines, "function drawLabel(text, x, yTop, r, g, b) {")
+    table.insert(lines, "  var attrs = $.NSMutableDictionary.dictionary")
+    table.insert(lines, "  attrs.setObjectForKey(lblFont, $.NSFontAttributeName)")
+    table.insert(lines, "  attrs.setObjectForKey($.NSColor.colorWithCalibratedRedGreenBlueAlpha(r, g, b, 1), $.NSForegroundColorAttributeName)")
+    table.insert(lines, "  var s = $.NSString.stringWithString(text)")
+    table.insert(lines, "  var sz = s.sizeWithAttributes(attrs)")
+    table.insert(lines, "  var bx = x + pw + 2")
+    table.insert(lines, "  var by = yTop - pw - 2 - sz.height - 4")
+    table.insert(lines, "  lblBg.set")
+    table.insert(lines, "  $.NSBezierPath.fillRect($.NSMakeRect(bx, by, sz.width + 8, sz.height + 4))")
+    table.insert(lines, "  s.drawAtPointWithAttributes($.NSMakePoint(bx + 4, by + 2), attrs)")
+    table.insert(lines, "}")
+
+    for i, rect in ipairs(allCropRects) do
+      if labeled[rect.focalLength] and rect.isoLabel then
+        local colorIndex = rect.colorIndex or (((i - 1) % #FOVRenderer.colorNames) + 1)
+        local rgb = FOVRenderer.colorRGB[FOVRenderer.colorNames[colorIndex]]
+        -- JS string literal: U+2248 via escape; label text is otherwise ASCII
+        local text = rect.isoLabel:gsub("{approx}", "\\u2248"):gsub("'", "\\'")
+        if rect.rotatedCorners then
+          local ul = rect.rotatedCorners[1]
+          table.insert(lines, string.format(
+            "drawLabel('%s', Math.floor(%s * imgW), imgH - Math.floor(%s * imgH), %s, %s, %s)",
+            text, ul[1], ul[2], rgb[1] / 255, rgb[2] / 255, rgb[3] / 255))
+        else
+          table.insert(lines, string.format(
+            "drawLabel('%s', Math.floor(%d * scaleX), imgH - Math.floor(%d * scaleY), %s, %s, %s)",
+            text, rect.left, rect.top, rgb[1] / 255, rgb[2] / 255, rgb[3] / 255))
+        end
+      end
+    end
+  end
+
   table.insert(lines, "img.unlockFocus")
 
   -- Save as JPEG
@@ -638,7 +681,7 @@ end
 
   Returns: Path to the rendered JPEG
 --]]
-function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFLs, displayWidth, displayHeight, workingWidth, workingHeight, renderCount, highlightFL, cropRect)
+function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFLs, displayWidth, displayHeight, workingWidth, workingHeight, renderCount, highlightFL, cropRect, showLabels)
   local tempPath = LrPathUtils.getStandardFilePath("temp")
   local outputPath = LrPathUtils.child(tempPath, "fov_render_" .. renderCount .. ".jpg")
   local scriptPath = LrPathUtils.child(tempPath, "fov_draw.ps1")
@@ -758,6 +801,49 @@ function FOVRenderer.renderWindowsOverlay(baseImagePath, allCropRects, enabledFL
     end
   end
 
+  -- Crop-equivalent ISO labels at each rect's top-left corner (drawn last so they sit above dimming)
+  if showLabels then
+    local labelFont = math.max(11, math.floor(displayWidth / 75))
+    local labelHeight = math.floor(labelFont * 1.4) + 4
+    local labeled = FOVCalculator.selectLabeledFLs(
+      allCropRects, enabledFLs, displayHeight / workingHeight, labelHeight)
+
+    table.insert(lines, '$g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit')
+    table.insert(lines, string.format('$lblScale = $img.Width / %d', displayWidth))
+    table.insert(lines, string.format(
+      '$lblFont = New-Object System.Drawing.Font("Segoe UI", [float](%d * $lblScale), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)',
+      labelFont))
+    table.insert(lines, '$lblBg = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(153, 0, 0, 0))')
+
+    for i, rect in ipairs(allCropRects) do
+      if labeled[rect.focalLength] and rect.isoLabel then
+        local colorIndex = rect.colorIndex or (((i - 1) % #FOVRenderer.colorNames) + 1)
+        local rgb = FOVRenderer.colorRGB[FOVRenderer.colorNames[colorIndex]]
+        -- PowerShell double-quoted string: U+2248 via subexpression (script file is not UTF-8 safe on PS 5.1)
+        local text = rect.isoLabel:gsub("{approx}", "$([char]0x2248)")
+        if rect.rotatedCorners then
+          local ul = rect.rotatedCorners[1]
+          table.insert(lines, string.format('$lx = [math]::Floor(%s * $img.Width) + $pw + 2', ul[1]))
+          table.insert(lines, string.format('$ly = [math]::Floor(%s * $img.Height) + $pw + 2', ul[2]))
+        else
+          table.insert(lines, string.format('$lx = [math]::Floor(%d * $scaleX) + $pw + 2', rect.left))
+          table.insert(lines, string.format('$ly = [math]::Floor(%d * $scaleY) + $pw + 2', rect.top))
+        end
+        table.insert(lines, '$txt = "' .. text .. '"')
+        table.insert(lines, '$sz = $g.MeasureString($txt, $lblFont)')
+        table.insert(lines, '$g.FillRectangle($lblBg, $lx, $ly, ($sz.Width + 8), ($sz.Height + 4))')
+        table.insert(lines, string.format(
+          '$lb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, %d, %d, %d))',
+          rgb[1], rgb[2], rgb[3]))
+        table.insert(lines, '$g.DrawString($txt, $lblFont, $lb, ($lx + 4), ($ly + 2))')
+        table.insert(lines, '$lb.Dispose()')
+      end
+    end
+
+    table.insert(lines, '$lblFont.Dispose()')
+    table.insert(lines, '$lblBg.Dispose()')
+  end
+
   table.insert(lines, '$g.Dispose()')
   table.insert(lines, '$img.Save("' .. outputPath .. '", [System.Drawing.Imaging.ImageFormat]::Jpeg)')
   table.insert(lines, '$img.Dispose()')
@@ -863,13 +949,13 @@ function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRect
       outputPath = FOVRenderer.renderWindowsOverlay(
         basePath, rects, enabledFLs,
         dw, dh, iw, ih,
-        renderCount.value, highlightFL, activeCrop
+        renderCount.value, highlightFL, activeCrop, props.showISO
       )
     else
       outputPath = FOVRenderer.renderMacOverlay(
         basePath, rects, enabledFLs,
         dw, dh, iw, ih,
-        renderCount.value, highlightFL, activeCrop
+        renderCount.value, highlightFL, activeCrop, props.showISO
       )
     end
 
@@ -912,6 +998,14 @@ function FOVRenderer.createUnifiedImageView(photo, allCropRects, croppedCropRect
   end
 
   props:addObserver("highlightFL", function()
+    scheduleRender()
+  end)
+
+  -- ISO label toggles (label text is re-annotated by the dialog before the debounced render runs)
+  props:addObserver("showISO", function()
+    scheduleRender()
+  end)
+  props:addObserver("isoFullFrame", function()
     scheduleRender()
   end)
 
