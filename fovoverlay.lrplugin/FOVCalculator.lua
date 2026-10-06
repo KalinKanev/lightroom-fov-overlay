@@ -213,6 +213,24 @@ function FOVCalculator.calculateDoF(focalLengthMM, fNumber, distanceM, cropFacto
 end
 
 --[[
+  Pick the focal lengths to pre-select: the `count` shortest ones that are
+  strictly longer than baseFL. For a cropped photo pass the crop's
+  equivalent FL so the defaults are tighter than the current crop.
+
+  Returns a set { [focalLength] = true }.
+--]]
+function FOVCalculator.defaultSelectedFLs(focalLengths, baseFL, count)
+  local result, n = {}, 0
+  for _, fl in ipairs(focalLengths) do
+    if fl > baseFL and n < count then
+      result[fl] = true
+      n = n + 1
+    end
+  end
+  return result
+end
+
+--[[
   Map a Lightroom orientation string to the degrees of clockwise rotation
   needed to make the image upright.
   Returns 0, 90, 180, or 270.

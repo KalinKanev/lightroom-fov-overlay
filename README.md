@@ -8,7 +8,7 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 
 ## Features
 
-- Visualize crop areas for standard focal lengths (24mm–1200mm)
+- Visualize crop areas for standard focal lengths (24mm–4000mm)
 - **Full uncropped frame view** — see the original sensor frame with Lightroom crop visualized as a darkened overlay (supports angled crops)
 - **Crop sensor support** — automatically uses 35mm equivalent focal length for correct FOV on APS-C, Micro Four Thirds, etc.
 - Switch between **Full Frame** and **Cropped** views via dropdown

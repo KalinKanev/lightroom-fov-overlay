@@ -22,7 +22,8 @@ local FOVRenderer = require 'FOVRenderer'
 
 -- Standard focal lengths in photography
 local standardFocalLengths = {
-  24, 28, 35, 50, 70, 85, 100, 135, 200, 300, 400, 420, 450, 500, 560, 600, 800, 840, 1000, 1200
+  24, 28, 35, 50, 70, 85, 100, 135, 200, 300, 400, 420, 450, 500, 560, 600, 800, 840, 1000, 1200,
+  1400, 1600, 1800, 2000, 2400, 2800, 3200, 4000
 }
 
 --[[
@@ -405,17 +406,21 @@ LrTasks.startAsyncTask(function()
 
     props.headerText = buildFullFrameHeader()
 
-    -- Initialize checkbox states and per-FL enabled properties
-    local enabledCount = 0
-    for _, fl in ipairs(standardFocalLengths) do
-      props["enabled_" .. fl] = fl > originalFL
-      if fl > originalFL then
-        enabledCount = enabledCount + 1
-        props["show_" .. fl] = (enabledCount <= 4)
-      else
-        props["show_" .. fl] = false
+    -- Pre-select the 4 FLs just tighter than what the photo currently shows:
+    -- tighter than the Lightroom crop when cropped (effectiveFL), else than the shot FL.
+    -- Same selection in both views; wider FLs stay enabled in full-frame view.
+    local function applyDefaultSelection()
+      local selected = FOVCalculator.defaultSelectedFLs(standardFocalLengths, effectiveFL, 4)
+      for _, fl in ipairs(standardFocalLengths) do
+        props["show_" .. fl] = (props["enabled_" .. fl] and selected[fl]) or false
       end
     end
+
+    -- Initialize checkbox states and per-FL enabled properties
+    for _, fl in ipairs(standardFocalLengths) do
+      props["enabled_" .. fl] = fl > originalFL
+    end
+    applyDefaultSelection()
 
     -- Highlight crop dropdown state
     props.highlightFL = 0  -- 0 = None
@@ -464,30 +469,11 @@ LrTasks.startAsyncTask(function()
         props.headerText = buildFullFrameHeader()
       end
 
-      -- Update enabled states
-      local newlyEnabled = {}
+      -- Update enabled states, then re-apply the tighter-than-crop defaults
       for _, fl in ipairs(standardFocalLengths) do
-        local wasEnabled = props["enabled_" .. fl]
-        local nowEnabled = fl > activeFL
-        props["enabled_" .. fl] = nowEnabled
-        -- Uncheck FLs that become unavailable
-        if wasEnabled and not nowEnabled then
-          props["show_" .. fl] = false
-        end
-        -- Track newly enabled FLs (were disabled, now enabled)
-        if not wasEnabled and nowEnabled then
-          table.insert(newlyEnabled, fl)
-        end
+        props["enabled_" .. fl] = fl > activeFL
       end
-
-      -- Always re-select the 4 widest (closest to base FL) available FOVs
-      local count = 0
-      for _, fl in ipairs(standardFocalLengths) do
-        if fl > activeFL then
-          count = count + 1
-          props["show_" .. fl] = (count <= 4)
-        end
-      end
+      applyDefaultSelection()
 
       rebuildHighlightItems()
     end
@@ -670,7 +656,7 @@ LrTasks.startAsyncTask(function()
     }
 
     -- Build checkbox items into columns (top-to-bottom, then left-to-right)
-    local numColumns = 3
+    local numColumns = 4
     local totalItems = #standardFocalLengths
     local itemsPerColumn = math.ceil(totalItems / numColumns)
 
