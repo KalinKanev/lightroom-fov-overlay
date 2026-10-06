@@ -23,7 +23,7 @@ local FOVRenderer = require 'FOVRenderer'
 -- Standard focal lengths in photography
 local standardFocalLengths = {
   24, 28, 35, 50, 70, 85, 100, 135, 200, 300, 400, 420, 450, 500, 560, 600, 800, 840, 1000, 1200,
-  1400, 1600, 1800, 2000, 2400, 2800, 3200, 4000
+  1400, 1600
 }
 
 --[[
