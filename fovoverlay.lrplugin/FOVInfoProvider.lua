@@ -243,7 +243,8 @@ function FOVInfoProvider.sectionsForBottomOfDialog(f, _)
 
       f:row {
         f:static_text {
-          title = "Calculates crop areas using the formula:\nCrop Ratio = Target FL / Original FL",
+          title = "Calculates crop areas using the formula:\nCrop Ratio = Target FL / Original FL\n\n" ..
+                  "Crop-equivalent ISO (approx.):\nISO \195\151 (full frame area \195\183 crop area)",
           font = "<system/small>",
         },
       },

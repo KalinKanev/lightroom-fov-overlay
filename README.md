@@ -15,6 +15,7 @@ Select a photo shot at a given focal length and instantly see crop rectangles fo
 - Toggle individual focal lengths on/off with checkboxes
 - See remaining megapixels for each crop level
 - Highlight a specific crop with dimming outside the rectangle
+- **Crop-equivalent ISO** — each overlay is labeled with the approximate ISO an uncropped frame would need to look as noisy at the same output size, after Steve Perry's crop-vs-ISO guidance
 - 10 distinct color-coded overlays at 50% opacity
 - Screen-aware dialog sizing — fits any display
 - One-click update checking from Plugin Manager
@@ -60,6 +61,28 @@ FOV guide rectangles represent correct full-frame equivalent focal lengths regar
 Each overlay rectangle shows how much of the current image you would need to crop to match the field of view of a longer focal length.
 
 Each selected focal length gets a unique color from the palette: green, yellow, orange, red, cyan, magenta, blue, lime, pink, white.
+
+### Crop-Equivalent ISO
+
+Cropping does not add noise per pixel. But a cropped image has to be enlarged more to reach the same print or screen size, so its noise is enlarged too. Wildlife photographer Steve Perry explains this in [The Cropping Epidemic](https://backcountrygallery.com/the-cropping-epidemic/) and [Cropping? Better Drop Your ISO!](https://backcountrygallery.com/cropping-better-drop-your-iso/).
+
+The plugin estimates it as:
+
+```
+Equivalent ISO = Shot ISO × (Full frame area ÷ Crop area)
+Extra stops    = log2(Full frame area ÷ Crop area)
+```
+
+A 2× crop (for example 300mm cropped to 600mm) at ISO 1600 looks roughly like ISO 6400 uncropped, which is 2 stops more. Values are rounded to the nearest 1/3-stop ISO and marked with ≈.
+
+Where it appears:
+- **On the overlay:** each rectangle is labeled at its top-left corner, e.g. `500mm ≈ISO 4000`. Labels that would overlap a neighbor are skipped.
+- **In the focal length list:** next to each checked focal length.
+- **In the header:** the equivalent ISO of your current Lightroom crop, with the extra stops.
+
+Turn it off with **Show ISO equiv**. On APS-C and Micro Four Thirds bodies, **vs full frame** also multiplies by the sensor crop factor squared, so an APS-C ISO 800 shot reads as about full-frame ISO 1800.
+
+This is an approximation. It assumes the same output size and ignores read noise, dynamic range and AI denoise. If the photo has no ISO in its metadata, only the extra stops are shown.
 
 ## Requirements
 
