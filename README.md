@@ -80,7 +80,7 @@ Where it appears:
 - **In the focal length list:** next to each checked focal length.
 - **In the header:** the equivalent ISO of your current Lightroom crop, with the extra stops.
 
-Turn it off with **Show ISO equiv**. On APS-C and Micro Four Thirds bodies, **vs full frame** also multiplies by the sensor crop factor squared, so an APS-C ISO 800 shot reads as about full-frame ISO 1800.
+Turn it off with **Show ISO equiv**. On APS-C and Micro Four Thirds bodies, **vs full frame** also multiplies by the sensor crop factor squared, so an APS-C ISO 800 shot behaves like full-frame ISO 1800, shown as ≈ISO 2000 FF after rounding. With it on, the extra stops are measured against full frame at your shot ISO, so they include the sensor-size penalty as well as the crop.
 
 This is an approximation. It assumes the same output size and ignores read noise, dynamic range and AI denoise. If the photo has no ISO in its metadata, only the extra stops are shown.
 

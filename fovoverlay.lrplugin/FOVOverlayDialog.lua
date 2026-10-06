@@ -584,7 +584,7 @@ LrTasks.startAsyncTask(function()
       for _, fl in ipairs(standardFocalLengths) do
         local rect = byFL[fl]
         props["iso_" .. fl] = (props.showISO and rect)
-          and FOVCalculator.formatISOValue(rect.isoEq, "\226\137\136", false)
+          and (FOVCalculator.formatISOValue(rect.isoEq, "\226\137\136", false) .. ffSuffix())
           or ""
       end
     end
@@ -698,7 +698,7 @@ LrTasks.startAsyncTask(function()
           title = LrView.bind("iso_" .. fl),
           font = "<system/small>",
           text_color = LrColor(0.65, 0.65, 0.65),
-          width_in_chars = 9,
+          width_in_chars = 12,
           visible = isAvailable and LrView.bind("show_" .. fl) or false,
         },
       })
@@ -790,8 +790,11 @@ LrTasks.startAsyncTask(function()
         value = LrView.bind("isoFullFrame"),
         enabled = LrView.bind("showISO"),
         visible = isCropSensor,
-        tooltip = "Also convert to full-frame equivalence: multiplies by the sensor crop factor squared\n" ..
-                  "(APS-C 1.5\195\151: ISO 800 \226\137\136 full-frame ISO 1800).",
+        tooltip = "Also convert to full-frame equivalence: multiplies by the sensor crop factor squared.\n" ..
+                  "APS-C 1.5\195\151: ISO 800 behaves like full-frame ISO 1800, shown as \226\137\136ISO 2000\n" ..
+                  "(values are rounded to the nearest 1/3-stop ISO).\n" ..
+                  "With this on, the EV figure is stops worse than full frame at the shot ISO,\n" ..
+                  "so it includes the sensor-size penalty as well as the crop.",
       },
       f:static_text {
         title = LrView.bind("renderWarning"),
