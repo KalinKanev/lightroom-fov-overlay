@@ -224,4 +224,136 @@ function FOVCalculator.orientationToDegrees(orientationStr)
   else return 0 end
 end
 
+--[[
+  Crop-equivalent ISO (after Steve Perry's crop-vs-ISO guidance).
+
+  At a fixed output size, cropping to a fraction of the sensor area
+  enlarges the noise the same way raising ISO by the inverse fraction does
+  (photon shot noise dominated). So:
+
+    areaRatio     = fullArea / cropArea
+    equivalentISO = shotISO * areaRatio
+    stops         = log2(areaRatio)
+
+  Approximate: ignores read noise, sensor differences and denoise.
+--]]
+
+-- Standard 1/3-stop ISO series used for display rounding
+local THIRD_STOP_ISOS = {
+  50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250,
+  1600, 2000, 2500, 3200, 4000, 5000, 6400, 8000, 10000, 12800, 16000, 20000,
+  25600, 32000, 40000, 51200, 64000, 80000, 102400, 128000, 160000, 204800,
+  256000, 320000, 409600,
+}
+
+--[[
+  Parse ISO from Lightroom metadata.
+  Accepts a number (getRawMetadata) or a string like "ISO 3200" / "12,800".
+  Returns a positive number or nil.
+--]]
+function FOVCalculator.parseISO(value)
+  if type(value) == "number" then
+    return value > 0 and value or nil
+  end
+  if type(value) ~= "string" then return nil end
+  local n = tonumber((value:gsub("[^%d]", "")))
+  if n and n > 0 then return n end
+  return nil
+end
+
+--[[
+  Round an ISO value to the nearest standard 1/3-stop ISO (log distance).
+  Values well beyond the table are rounded to the nearest 1000.
+--]]
+function FOVCalculator.roundToThirdStopISO(iso)
+  if not iso or iso <= 0 then return nil end
+  if iso > THIRD_STOP_ISOS[#THIRD_STOP_ISOS] * 1.12 then
+    return math.floor(iso / 1000 + 0.5) * 1000
+  end
+  local best, bestDiff = nil, math.huge
+  for _, v in ipairs(THIRD_STOP_ISOS) do
+    local d = math.abs(math.log(iso / v))
+    if d < bestDiff then
+      best, bestDiff = v, d
+    end
+  end
+  return best
+end
+
+--[[
+  Compute the crop-equivalent ISO.
+
+  Parameters:
+    baseISO:  Shot ISO (number) or nil when unknown
+    fullArea: Full sensor area in pixels (imageWidth * imageHeight)
+    cropArea: Crop area in the same pixel units
+    sensorCropFactor: Optional. When > 1, also converts to full-frame
+      equivalence by multiplying the ratio by sensorCropFactor^2
+      (APS-C 1.5x: ISO 800 behaves like full-frame ISO ~1800).
+
+  Returns table { ratio, stops, iso, display } or nil for invalid areas.
+  iso and display are nil when baseISO is nil.
+--]]
+function FOVCalculator.equivalentISO(baseISO, fullArea, cropArea, sensorCropFactor)
+  if not fullArea or not cropArea or fullArea <= 0 or cropArea <= 0 then return nil end
+  local ratio = fullArea / cropArea
+  if sensorCropFactor and sensorCropFactor > 1 then
+    ratio = ratio * sensorCropFactor * sensorCropFactor
+  end
+  local stops = math.log(ratio) / math.log(2)
+  local iso, display
+  if baseISO then
+    iso = baseISO * ratio
+    display = FOVCalculator.roundToThirdStopISO(iso)
+  end
+  return { ratio = ratio, stops = stops, iso = iso, display = display }
+end
+
+--[[
+  Format an equivalentISO result for display.
+    approx:    the "approximately" glyph to use (UTF-8 for LrView, an escape for scripts)
+    includeEV: append "(+x.x EV)" when the ISO is known
+  Examples: "≈ISO 3200 (+2.0 EV)", "≈ISO 3200", "+2.0 EV"
+--]]
+function FOVCalculator.formatISOValue(eq, approx, includeEV)
+  if not eq then return "" end
+  local ev = string.format("+%.1f EV", eq.stops)
+  if not eq.display then return ev end
+  local isoStr = string.format("%sISO %d", approx, eq.display)
+  if includeEV then
+    return isoStr .. " (" .. ev .. ")"
+  end
+  return isoStr
+end
+
+--[[
+  Choose which enabled rects get an on-image label so labels don't collide.
+  Rects must be sorted outermost first (ascending focal length), which is
+  how calculateAllCropRects returns them. Labels sit at each rect's top-left
+  corner, so a rect is labeled only if its top edge is at least labelHeight
+  display pixels below the previous labeled rect's top edge.
+
+  Parameters:
+    rects:       crop rect tables with focalLength and top (working pixels)
+    enabledFLs:  array of checked focal lengths
+    scaleY:      display pixels per working pixel
+    labelHeight: label box height in display pixels
+
+  Returns a set { [focalLength] = true }.
+--]]
+function FOVCalculator.selectLabeledFLs(rects, enabledFLs, scaleY, labelHeight)
+  local enabled = {}
+  for _, fl in ipairs(enabledFLs) do enabled[fl] = true end
+  local result, lastTop = {}, nil
+  for _, rect in ipairs(rects) do
+    if enabled[rect.focalLength] then
+      local top = rect.top * scaleY
+      if lastTop == nil or (top - lastTop) >= labelHeight then
+        result[rect.focalLength] = true
+        lastTop = top
+      end
+    end
+  end
+  return result
+end
 return FOVCalculator
